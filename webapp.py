@@ -12,6 +12,9 @@ from google import genai
 from google.genai import types
 from ebay_engine import get_ebay_token, buscar_precos_ebay
 
+
+st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
+
 # --- CONFIGURAÇÃO DE ESTILO PROFISSIONAL (CSS ISOLADO) ---
 style_sheet = """
 <style>
@@ -155,34 +158,27 @@ style_sheet = """
         transform: translateY(-1px) !important;
         box-shadow: 0 6px 20px 0 rgba(14, 165, 233, 0.45) !important;
     }
-    /* AJUSTES PARA TELEMÓVEL (Ecrãs até 768px) */
+    /* AJUSTE RADICAL PARA TELEMÓVEL */
     @media (max-width: 768px) {
-        /* 1. Ajustar o tamanho das fontes para não quebrarem linhas */
-        [data-testid="stSidebar"] * {
-            font-size: 14px !important;
-        }
-
-        /* 2. Garantir que os botões têm o tamanho ideal para o polegar */
-        .stButton > button {
-            width: 100% !important;
-            height: 50px !important; /* Mais alto para ser fácil de clicar */
-            margin-bottom: 10px !important;
-        }
-
-        /* 3. Remover margens laterais exageradas no corpo da app */
+        /* Remove espaços laterais gigantes que o Streamlit cria no mobile */
         .main .block-container {
-            padding: 1rem 1rem !important;
+            padding-top: 2rem !important;
+            padding-bottom: 1rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
         }
 
-        /* 4. Ajustar a zona de upload (Browse Files) */
-        [data-testid="stFileUploadDropzone"] {
-            padding: 10px !important;
+        /* Força os botões a não estourarem a largura do ecrã */
+        .stButton button {
+            width: 100% !important;
+            box-sizing: border-box !important;
         }
-        
-        /* 5. Se o "Painel" estiver a cortar, reduzimos o título */
-        h1 {
-            font-size: 1.8rem !important;
+
+        /* Esconde elementos que podem estar a empurrar o layout para o lado */
+        [data-testid="stSidebar"] {
+            width: 80vw !important;
         }
+    
     }
 </style>
 """
@@ -465,7 +461,7 @@ def converter_para_excel(df):
 # ==========================================
 # 🎨 CONFIGURAÇÃO
 # ==========================================
-st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
+
 
 
 
