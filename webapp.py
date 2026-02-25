@@ -155,6 +155,35 @@ style_sheet = """
         transform: translateY(-1px) !important;
         box-shadow: 0 6px 20px 0 rgba(14, 165, 233, 0.45) !important;
     }
+    /* AJUSTES PARA TELEMÓVEL (Ecrãs até 768px) */
+    @media (max-width: 768px) {
+        /* 1. Ajustar o tamanho das fontes para não quebrarem linhas */
+        [data-testid="stSidebar"] * {
+            font-size: 14px !important;
+        }
+
+        /* 2. Garantir que os botões têm o tamanho ideal para o polegar */
+        .stButton > button {
+            width: 100% !important;
+            height: 50px !important; /* Mais alto para ser fácil de clicar */
+            margin-bottom: 10px !important;
+        }
+
+        /* 3. Remover margens laterais exageradas no corpo da app */
+        .main .block-container {
+            padding: 1rem 1rem !important;
+        }
+
+        /* 4. Ajustar a zona de upload (Browse Files) */
+        [data-testid="stFileUploadDropzone"] {
+            padding: 10px !important;
+        }
+        
+        /* 5. Se o "Painel" estiver a cortar, reduzimos o título */
+        h1 {
+            font-size: 1.8rem !important;
+        }
+    }
 </style>
 """
 st.markdown(style_sheet, unsafe_allow_html=True)
