@@ -122,9 +122,10 @@ def obter_saldo_visual(email_user):
     except Exception:
         return 0
 
-def guardar_no_historico(dados, objetivo):
+def guardar_no_historico(dados, objetivo, email_usuario):
     try:
         entry = {
+            "email": email_usuario,
             "produto": dados.get("produto"),
             "preco_medio": dados.get("preco_medio"),
             "sugestao_venda": dados.get("sugestao_venda"),
@@ -143,6 +144,34 @@ def guardar_no_historico(dados, objetivo):
 # 🏁 INICIALIZAÇÃO DE VARIÁVEIS (MUITO IMPORTANTE)
 # ==========================================
 modo_simulacao = False # <--- ADICIONA ISTO PARA MATAR OS AVISOS AMARELOS
+
+# --- CSS PARA CORRIGIR ABAS NO TELEMÓVEL ---
+st.markdown("""
+<style>
+    @media (max-width: 768px) {
+        [data-testid="stTabs"] {
+            display: flex !important;
+            flex-direction: row !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            gap: 8px !important;
+            padding-bottom: 10px !important;
+        }
+        [data-testid="stMarker"] { display: none !important; }
+        button[data-baseweb="tab"] {
+            background-color: #f0f2f6 !important;
+            border-radius: 20px !important;
+            padding: 8px 16px !important;
+            border: 1px solid #ddd !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: #0ea5e9 !important;
+            color: white !important;
+            border: none !important;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
 
 if "email_logado" not in st.session_state:
     st.session_state.email_logado = None # Começa vazio
@@ -691,7 +720,8 @@ with aba1:
                             
                             if dados:
                                 # --- GUARDAR AUTOMATICAMENTE NO SUPABASE ---
-                                guardar_no_historico(dados, objetivo_single)
+                                
+                                guardar_no_historico(dados, objetivo_single,st.session_state.email_logado)
 
                             # 3. Se a IA respondeu bem, descontar crédito ao utilizador
                             
@@ -892,7 +922,7 @@ with aba2:
                                 "Validar Mercado": dados.get('link_pesquisa', ''),
                                 "Raw": dados
                             })
-                            guardar_no_historico(dados, objetivo_final)
+                            guardar_no_historico(dados, objetivo_final,st.session_state.email_logado)
                     
                     barra.progress((i+1)/total_items)
                 
@@ -1009,7 +1039,7 @@ with aba_historico:
     st.subheader("📜 Registo Geral de Análises")
     
     # Procurar dados no Supabase
-    res = supabase.table("historico_scans").select("*").order("created_at", desc=True).execute()
+    res = supabase.table("historico_scans").select("*").eq("email", st.session_state.email_logado).order("created_at", desc=True).execute()
     
     if res.data:
         df_hist = pd.DataFrame(res.data)
@@ -1034,7 +1064,7 @@ with aba_historico:
         if st.button("🗑️ Limpar Todo o Histórico"):     
             try:
                 # O Supabase exige um filtro para o delete, por isso dizemos "onde ID não seja 0"
-                supabase.table("historico_scans").delete().neq("id", 0).execute()
+                supabase.table("historico_scans").delete().eq("email", st.session_state.email_logado).execute()
                 
                 st.success("🧹 Histórico completamente limpo!")
                 time.sleep(1) # Pequena pausa para a mensagem de sucesso piscar no ecrã
