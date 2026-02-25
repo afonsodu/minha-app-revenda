@@ -624,7 +624,7 @@ if "historico_conversas" not in st.session_state: st.session_state.historico_con
 if "id_conversa_ativa" not in st.session_state: st.session_state.id_conversa_ativa = None
 
 # ONDE SUBSTITUIR: Procura onde tens "aba1, aba2 = st.tabs(..."
-aba1, aba2, aba3, aba_historico = st.tabs(["🔍 Análise Individual", "📦 Análise em Bulk", "📰 Notícias","📜 Histórico"])
+aba1, aba2, aba3, aba_historico = st.tabs(["🔍 Análise Individual", "📦 Análise Bulk", "📰 Notícias","📜 Histórico"])
 
 
 # -----------------------------------------------------------------------------
