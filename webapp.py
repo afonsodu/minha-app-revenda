@@ -52,11 +52,6 @@ def garantir_token_ebay():
 ADMINS = ["afonsocgomesduarte@gmail.com"] # SUBSTITUI pelo teu e-mail real
 
 # Logo no início do código, antes de tudo:
-st.set_page_config(
-    page_title="Valurise App",
-    page_icon="app_icon.png",  # O nome do teu ficheiro aqui
-    layout="wide"
-)
 
 def set_app_icon(icon_path):
     
