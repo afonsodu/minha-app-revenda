@@ -21,8 +21,14 @@ st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 # No início do teu webapp.py
 if "client" not in st.session_state:
     try:
-        # Puxa as credenciais diretamente do cofre que acabaste de configurar
-        credenciais_gcp = service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"])
+        # Puxa as credenciais do cofre
+        info_servico = st.secrets["gcp_service_account"]
+        
+        # DEFINIMOS O SCOPE (O segredo para matar o erro de invalid_scope)
+        credenciais_gcp = service_account.Credentials.from_service_account_info(
+            info_servico,
+            scopes=['https://www.googleapis.com/auth/cloud-platform']
+        )
         
         st.session_state.client = genai.Client(
             vertexai=True, 
