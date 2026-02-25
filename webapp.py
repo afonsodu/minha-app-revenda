@@ -15,32 +15,6 @@ from ebay_engine import get_ebay_token, buscar_precos_ebay
 
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 
-st.markdown("""
-<style>
-    /* AJUSTE DISCRETO PARA ABAS NO TELEMÓVEL */
-    @media (max-width: 768px) {
-        /* Força as abas a ocuparem o espaço disponível sem scroll lateral */
-        [data-testid="stTabs"] [data-baseweb="tab-list"] {
-            display: flex !important;
-            justify-content: space-between !important;
-            gap: 2px !important;
-        }
-        
-        /* Reduz o tamanho da letra e o espaço interno apenas no mobile */
-        button[data-baseweb="tab"] {
-            padding-left: 5px !important;
-            padding-right: 5px !important;
-            font-size: 12px !important;
-            min-width: 60px !important;
-        }
-        
-        /* Garante que o texto não quebra em duas linhas e fica visível */
-        button[data-baseweb="tab"] p {
-            font-size: 11px !important;
-        }
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # No início do teu webapp.py
 if "client" not in st.session_state:
@@ -650,7 +624,7 @@ if "historico_conversas" not in st.session_state: st.session_state.historico_con
 if "id_conversa_ativa" not in st.session_state: st.session_state.id_conversa_ativa = None
 
 # ONDE SUBSTITUIR: Procura onde tens "aba1, aba2 = st.tabs(..."
-aba1, aba2, aba3, aba_historico = st.tabs(["🔍 Análise Individual", "📦 Análise em Bulk", "📰 Radar de Mercado","📜 Histórico"])
+aba1, aba2, aba3, aba_historico = st.tabs(["🔍 Análise Individual", "📦 Análise em Bulk", "📰 Notícias","📜 Histórico"])
 
 
 # -----------------------------------------------------------------------------
