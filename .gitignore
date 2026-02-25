@@ -1,0 +1,37 @@
+# --- SEGURANÇA E CHAVES (CRÍTICO) ---
+.streamlit/secrets.toml
+.env
+secrets.json
+*.pem
+*.key
+
+# --- FICHEIROS DE RASCUNHO E TESTES ---
+teste_seguranca.py
+rascunho.py
+testes/
+temp_*.py
+
+# --- AMBIENTE VIRTUAL E PYTHON ---
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- DADOS E BASE DE DADOS LOCAL ---
+*.db
+*.sqlite
+*.csv
+# Se tiveres uma pasta onde guardas as fotos enviadas pelos users temporariamente:
+temp_uploads/
+
+# --- SISTEMA OPERATIVO ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
