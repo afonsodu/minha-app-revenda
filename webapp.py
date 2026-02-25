@@ -145,33 +145,6 @@ def guardar_no_historico(dados, objetivo, email_usuario):
 # ==========================================
 modo_simulacao = False # <--- ADICIONA ISTO PARA MATAR OS AVISOS AMARELOS
 
-# --- CSS PARA CORRIGIR ABAS NO TELEMÓVEL ---
-st.markdown("""
-<style>
-    @media (max-width: 768px) {
-        [data-testid="stTabs"] {
-            display: flex !important;
-            flex-direction: row !important;
-            overflow-x: auto !important;
-            white-space: nowrap !important;
-            gap: 8px !important;
-            padding-bottom: 10px !important;
-        }
-        [data-testid="stMarker"] { display: none !important; }
-        button[data-baseweb="tab"] {
-            background-color: #f0f2f6 !important;
-            border-radius: 20px !important;
-            padding: 8px 16px !important;
-            border: 1px solid #ddd !important;
-        }
-        button[data-baseweb="tab"][aria-selected="true"] {
-            background-color: #0ea5e9 !important;
-            color: white !important;
-            border: none !important;
-        }
-    }
-</style>
-""", unsafe_allow_html=True)
 
 if "email_logado" not in st.session_state:
     st.session_state.email_logado = None # Começa vazio
