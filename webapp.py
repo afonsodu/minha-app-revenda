@@ -11,6 +11,7 @@ import base64
 from google import genai
 from google.genai import types
 from ebay_engine import get_ebay_token, buscar_precos_ebay
+import os
 
 
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
@@ -57,45 +58,34 @@ st.set_page_config(
     layout="wide"
 )
 
-def set_app_icon(image_path):
-    try:
-        with open(image_path, "rb") as f:
-            img_data = f.read()
-        b64_encoded = base64.b64encode(img_data).decode()
+def set_app_icon(icon_path):
+    
+    # Verifica se o ficheiro existe mesmo antes de tentar ler
+    if os.path.exists(icon_path):
+        with open(icon_path, "rb") as f:
+            data = f.read()
+            b64_encoded = base64.b64encode(data).decode()
         
-        # Este HTML diz ao iOS e Android para usarem esta imagem
-        # quando "instalam" a app no ecrã principal.
-        icon_html = f"""
-            <style>
-                /* Isto é um hack para injetar tags no <head> */
-                [data-testid="stAppViewContainer"] > .main {{
-                    padding-top: 0px;
-                }}
-            </style>
+        # O código abaixo "força" o ícone no navegador e no iPhone/Android
+        st.markdown(f"""
             <script>
-                var link = document.querySelector("link[rel~='icon']");
-                if (!link) {{
-                    link = document.createElement('link');
-                    link.rel = 'icon';
-                    document.getElementsByTagName('head')[0].appendChild(link);
-                }}
-                link.href = 'data:image/png;base64,{b64_encoded}';
+                var link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+                link.type = 'image/png';
+                link.rel = 'shortcut icon';
+                link.href = 'data:image/png;base64,{b64_encoded}?v=2';
+                document.getElementsByTagName('head')[0].appendChild(link);
                 
-                var apple_link = document.querySelector("link[rel='apple-touch-icon']");
-                if (!apple_link) {{
-                    apple_link = document.createElement('link');
-                    apple_link.rel = 'apple-touch-icon';
-                    document.getElementsByTagName('head')[0].appendChild(apple_link);
-                }}
-                apple_link.href = 'data:image/png;base64,{b64_encoded}';
+                var apple_link = document.querySelector("link[rel='apple-touch-icon']") || document.createElement('link');
+                apple_link.rel = 'apple-touch-icon';
+                apple_link.href = 'data:image/png;base64,{b64_encoded}?v=2';
+                document.getElementsByTagName('head')[0].appendChild(apple_link);
             </script>
-        """
-        st.components.v1.html(icon_html, height=0, width=0)
-    except FileNotFoundError:
-        print(f"Aviso: Ícone não encontrado em {image_path}")
+        """, unsafe_allow_html=True)
+    else:
+        # Se não encontrar o ficheiro, avisa-te na barra lateral (apenas para tu saberes)
+        st.sidebar.error(f"Erro: O ficheiro '{icon_path}' não foi encontrado no servidor.")
 
-# --- CHAMA A FUNÇÃO COM O TEU FICHEIRO ---
-# Certifica-te que o ficheiro 'app_icon_512.png' está na pasta do projeto
+# Chama a função logo no início
 set_app_icon("app_icon_512.png")
 
 @st.dialog("🚀 Upgrade para Plano PRO")
