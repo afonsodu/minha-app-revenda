@@ -12,6 +12,7 @@ from google import genai
 from google.genai import types
 from ebay_engine import get_ebay_token, buscar_precos_ebay
 import os
+from google.oauth2 import service_account
 
 
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
@@ -19,11 +20,19 @@ st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 
 # No início do teu webapp.py
 if "client" not in st.session_state:
-    st.session_state.client = genai.Client(
-        vertexai=True, 
-        project="gen-lang-client-0850234234", # Vê o ID no topo do Google Cloud Console
-        location="us-central1"
-    )
+    try:
+        # Puxa as credenciais diretamente do cofre que acabaste de configurar
+        credenciais_gcp = service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"])
+        
+        st.session_state.client = genai.Client(
+            vertexai=True, 
+            project="gen-lang-client-0850234234", 
+            location="us-central1",
+            credentials=credenciais_gcp
+        )
+    except Exception as e:
+        st.error(f"Erro ao carregar chave do Vertex AI: {e}")
+        
 client = st.session_state.client
 
 
