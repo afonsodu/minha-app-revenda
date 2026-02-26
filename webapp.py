@@ -351,23 +351,38 @@ def calcular_taxa_ebay(categoria, preco_venda):
     """Calcula a comissão do eBay baseada nas regras oficiais da tabela."""
     tarifa_fixa = 0.35 # Tarifa por pedido padrão
 
+    # 1. Calçado Esportivo (Sneakers)
     if categoria == "Calçado Esportivo":
         if preco_venda >= 150:
             return preco_venda * 0.08 # 8% e isento da tarifa fixa
         else:
-            return (preco_venda * 0.136) + tarifa_fixa # 13.6% + tarifa fixa
+            return (preco_venda * 0.136) + tarifa_fixa
 
+    # 2. Relógios de Luxo e Normais
+    elif categoria == "Relógios":
+        if preco_venda >= 2000:
+            return (preco_venda * 0.065) # 6.5% para relógios de luxo
+        else:
+            return (preco_venda * 0.15) + tarifa_fixa # 15% para relógios normais
+
+    # 3. Guitarras e Baixos
+    elif categoria == "Guitarras e Baixos":
+        return (preco_venda * 0.067) + tarifa_fixa # 6.7%
+
+    # 4. Livros, Filmes e Música
     elif categoria == "Livros/Mídia":
         return (preco_venda * 0.153) + tarifa_fixa # 15.3%
 
+    # 5. Colecionáveis (Cartas, Moedas, Figuras)
     elif categoria == "Colecionáveis":
         return (preco_venda * 0.1325) + tarifa_fixa # 13.25%
-        
-    elif categoria == "Guitarras":
-        return (preco_venda * 0.067) + tarifa_fixa # 6.7%
 
+    # 6. Eletrónica (Telemóveis, Consolas, Computadores)
+    elif categoria == "Eletrónica":
+        return (preco_venda * 0.09) + tarifa_fixa # Geralmente ronda os 9%
+
+    # 7. Regra Geral (Para tudo o resto)
     else:
-        # A Maioria das Categorias (Regra Geral)
         return (preco_venda * 0.136) + tarifa_fixa
 
 
@@ -379,7 +394,8 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
         2. BARCODE: Se houver um código de barras, extrai os números.
         3. Se não houver barcode, identifica o modelo exato pelo design.
         
-        Além disso, classifica o item ESTRITAMENTE numa destas categorias do eBay: "Calçado Esportivo", "Livros/Mídia", "Colecionáveis", "Guitarras" ou "Outros".
+        Além disso, classifica o item ESTRITAMENTE numa destas categorias do eBay: 
+        "Calçado Esportivo", "Relógios", "Eletrónica", "Guitarras e Baixos", "Livros/Mídia", "Colecionáveis" ou "Outros".
         
         Responde APENAS num formato JSON exato e válido, sem markdown:
         {"produto": "Nome Comercial Completo + Código de Barras (se houver)", "categoria": "Categoria Escolhida"}
