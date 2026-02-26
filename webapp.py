@@ -914,7 +914,8 @@ with aba2:
         try:
             excel_data = converter_para_excel(df_res)
             st.download_button("📥 Baixar Excel", excel_data, "relatorio_valurise.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        except: pass
+        except Exception as e:
+            st.error(f"⚠️ Erro ao gerar o ficheiro Excel: {e}")
         
         st.write("---")
         opcoes = [row["Ficheiro"] for row in st.session_state.bulk_results]
