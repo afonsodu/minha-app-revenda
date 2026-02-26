@@ -346,23 +346,59 @@ if "single_result" not in st.session_state: st.session_state.single_result = Non
 if "chat_history_single" not in st.session_state: st.session_state.chat_history_single = []
 if "chat_session_single" not in st.session_state: st.session_state.chat_session_single = None
 #==============================================
+
+def calcular_taxa_ebay(categoria, preco_venda):
+    """Calcula a comissão do eBay baseada nas regras oficiais da tabela."""
+    tarifa_fixa = 0.35 # Tarifa por pedido padrão
+
+    if categoria == "Calçado Esportivo":
+        if preco_venda >= 150:
+            return preco_venda * 0.08 # 8% e isento da tarifa fixa
+        else:
+            return (preco_venda * 0.136) + tarifa_fixa # 13.6% + tarifa fixa
+
+    elif categoria == "Livros/Mídia":
+        return (preco_venda * 0.153) + tarifa_fixa # 15.3%
+
+    elif categoria == "Colecionáveis":
+        return (preco_venda * 0.1325) + tarifa_fixa # 13.25%
+        
+    elif categoria == "Guitarras":
+        return (preco_venda * 0.067) + tarifa_fixa # 6.7%
+
+    else:
+        # A Maioria das Categorias (Regra Geral)
+        return (preco_venda * 0.136) + tarifa_fixa
+
+
 def analisar_imagem_json(image, custo, objetivo, sabe_custo):
     try:
-        # --- PASSO 1: IDENTIFICAÇÃO MULTI-FATOR (OCR + BARCODE + VISÃO) ---
         prompt_id = """
         Atua como um scanner de inventário. Analisa a imagem e extrai:
         1. OCR: Todo o texto da embalagem (Marca, Modelo, Tons, Edições).
         2. BARCODE: Se houver um código de barras, extrai os números.
         3. Se não houver barcode, identifica o modelo exato pelo design.
         
-        Responde APENAS com o nome comercial completo + Código de Barras (se houver).
+        Além disso, classifica o item ESTRITAMENTE numa destas categorias do eBay: "Calçado Esportivo", "Livros/Mídia", "Colecionáveis", "Guitarras" ou "Outros".
+        
+        Responde APENAS num formato JSON exato e válido, sem markdown:
+        {"produto": "Nome Comercial Completo + Código de Barras (se houver)", "categoria": "Categoria Escolhida"}
         """
         
         res_visao = client.models.generate_content(
             model='gemini-2.0-flash', 
             contents=[prompt_id, image]
         )
-        nome_item = res_visao.text.strip()
+        
+        # Lógica de extração segura para não quebrar a app se a IA falhar o JSON
+        texto_limpo = res_visao.text.replace("```json", "").replace("```", "").strip()
+        try:
+            dados_ia = json.loads(texto_limpo)
+            nome_item = dados_ia.get("produto", "Item Desconhecido")
+            categoria_item = dados_ia.get("categoria", "Outros")
+        except:
+            nome_item = res_visao.text.strip() # Fallback para o teu método antigo
+            categoria_item = "Outros"
         
         # --- PASSO 2: CONSULTA AO MOTOR EBAY ---
         token = garantir_token_ebay()
@@ -401,7 +437,8 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
             
             # --- CÁLCULO DA IA PARA TAXAS ---
             portes_medios = sum(envios) / len(envios) if envios else 4.50
-            comissao_plataforma = p_venda * 0.13 # 13% de taxa (padrão eBay/Marketplaces)
+            # A magia acontece aqui: a comissão adapta-se à categoria e ao preço!
+            comissao_plataforma = calcular_taxa_ebay(categoria_item, p_venda) 
             taxas_estimadas = portes_medios + comissao_plataforma
             
             custo_real = 0 if not sabe_custo else custo
