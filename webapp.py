@@ -1060,9 +1060,9 @@ with aba2:
                 img_selecionada = st.session_state.bulk_images.get(escolha)
                 if img_selecionada:
                     st.session_state.chat_session_bulk = criar_chat_session(item_dados['Raw'])
-                    nome_prod = item_dados['Produto']
-                    veredito = item_dados['Veredito']
-                    boas_vindas = f"👋 Im ready to chat about **{nome_prod}** {veredito}. \n\nBased on the references I found, do you want to know more about the pricing strategy or how to prepare the ad?"
+                    nome_prod = item_dados['Item']
+                    veredito = item_dados['Veredict']
+                    boas_vindas = f"👋 I'm ready to chat about **{nome_prod}** {veredito}. \n\nBased on the references I found, do you want to know more about the pricing strategy or how to prepare the ad?"
                     st.session_state.chat_history_bulk.append({"role": "assistant", "content": boas_vindas})
 
             container_chat_bulk = st.container(height=400)
