@@ -18,6 +18,37 @@ from google.oauth2 import service_account
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 
 
+# --- 1. ZONA DE CONFIGURAÇÃO (O Canto do Ecrã) ---
+st.sidebar.header("⚙️ Market Settings")
+
+# O utilizador escolhe a Região logo de início
+region = st.sidebar.selectbox(
+    "Select your Region", 
+    ["🇺🇸 USA ($)", "🇬🇧 UK (£)", "🇵🇹 Portugal (€)"]
+)
+
+# Definir variáveis padrão (para não dar erro noutras regiões)
+seller_type = "Business" 
+vat_registered = "Yes"
+currency = "€"
+
+# A Lógica Inteligente para o UK e US
+if region == "🇬🇧 UK (£)":
+    currency = "£"
+    seller_type = st.sidebar.radio("Account Type", ["Private", "Business"])
+    
+    # Só pergunta do IVA se for Business
+    if seller_type == "Business":
+        vat_registered = st.sidebar.radio("Are you VAT Registered?", ["Yes", "No"])
+        st.sidebar.caption("If 'No', eBay charges 20% VAT on your seller fees.")
+    else:
+        st.sidebar.success(f"Private sellers pay 0% final value fees in the UK! 🎉")
+
+elif region == "🇺🇸 USA ($)":
+    currency = "$"
+    # Nos EUA não há Private/Business nestes moldes, a IA só precisa da categoria depois.
+
+
 # No início do teu webapp.py
 if "client" not in st.session_state:
     try:
@@ -58,7 +89,7 @@ def garantir_token_ebay():
             cert_id = st.secrets["EBAY_CERT_ID"]
             st.session_state.ebay_token = get_ebay_token(app_id, cert_id)
         except Exception as e:
-            st.error("Erro: Chaves do eBay não encontradas no cofre.")
+            st.error("Error: eBay keys not found in secrets.")
             return None
     return st.session_state.ebay_token
 
@@ -93,22 +124,22 @@ def set_app_icon(icon_path):
         """, unsafe_allow_html=True)
     else:
         # Se não encontrar o ficheiro, avisa-te na barra lateral (apenas para tu saberes)
-        st.sidebar.error(f"Erro: O ficheiro '{icon_path}' não foi encontrado no servidor.")
+        st.sidebar.error(f"Error: The file '{icon_path}' was not found on the server.")
 
 # Chama a função logo no início
 set_app_icon("app_icon_512.png")
 
-@st.dialog("🚀 Upgrade para Plano PRO")
+@st.dialog("🚀 Upgrade to PRO Plan")
 def popup_upgrade():
-    st.write("Esgotaste os teus créditos diários gratuitos!")
-    st.write("Com o **Plano PRO**, tens:")
-    st.write("- 💎 Análises Ilimitadas")
-    st.write("- ⚡ Processamento Bulk mais rápido")
-    st.write("- 📈 Relatórios detalhados em Excel")
+    st.write("You've run out of your daily free credits!")
+    st.write("With the **PRO Plan**, you get:")
+    st.write("- 💎 Unlimited Analyses")
+    st.write("- ⚡ Faster Bulk Processing")
+    st.write("- 📈 Detailed Reports in Excel")
     
     st.divider()
-    st.link_button("💎 Obter Plano PRO - 9.99€/mês", "https://tuolinkdostripe.com", use_container_width=True)
-    if st.button("Continuar no plano grátis"):
+    st.link_button(f"💎 Obtain Pro - 9.99{currency}/month", "https://tuolinkdostripe.com", use_container_width=True)
+    if st.button("Continue on the free plan"):
         st.rerun()
 
 def obter_saldo_visual(email_user):
@@ -220,7 +251,7 @@ def gerir_creditos(email_user):
             return False, 0
 
     except Exception as e:
-        st.error(f"Erro na Base de Dados: {e}")
+        st.error(f"Database Error: {e}")
         return False, 0
 
 def gastar_credito(email_utilizador):
@@ -239,23 +270,22 @@ def converter_para_excel(df):
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_export = df.copy()
         
-        # 1. MUDAR EMOJIS PARA TEXTO (Para o Excel conseguir ler a regra)
-        # Vamos usar palavras curtas que funcionam bem nas regras
-        if 'Veredito' in df_export.columns:
-            df_export['Veredito'] = df_export['Veredito'].astype(str)\
-                .str.replace('🟢', 'SIM')\
-                .str.replace('🟡', 'TALVEZ')\
-                .str.replace('🔴', 'NAO')
 
-        # 2. LIMPEZA DE NÚMEROS (Tirar o € e virar número real)
-        colunas_dinheiro = ['Anunciar (€)', 'Valor Real', 'Input (€)', 'Lucro Est. (€)']
+        if 'Verdict' in df_export.columns:
+            df_export['Verdict'] = df_export['Verdict'].astype(str)\
+                .str.replace('🟢', 'YES')\
+                .str.replace('🟡', 'MAYBE')\
+                .str.replace('🔴', 'NO')
+
+        # 2. LIMPEZA DE NÚMEROS (Tirar a moeda e virar número real)
+        colunas_dinheiro = [f'Cost ({currency})', f'Avg Price ({currency})', f'Target Price ({currency})', f'Est. Fees ({currency})', f'Net Profit ({currency})']
         for col in colunas_dinheiro:
             if col in df_export.columns:
-                df_export[col] = df_export[col].astype(str).str.replace('€', '').str.replace(',', '.').str.strip()
+                df_export[col] = df_export[col].astype(str).str.replace(f'{currency}', '').str.replace(',', '.').str.strip()
                 df_export[col] = pd.to_numeric(df_export[col], errors='coerce')
         
         # Escrever os dados
-        sheet_name = 'Resultados'
+        sheet_name = 'Results'
         df_export.to_excel(writer, index=False, sheet_name=sheet_name)
         
         # --- A MAGIA DAS CORES (Formatação Condicional) ---
@@ -302,15 +332,15 @@ def converter_para_excel(df):
 # --- FUNÇÃO DE AVISO LEGAL (Coloca isto junto das outras funções) ---
 def mostrar_rodape_legal():
     st.markdown("---") # Uma linha separadora subtil
-    with st.expander("ℹ️ Aviso Legal e Isenção de Responsabilidade (Ler com atenção)"):
+    with st.expander("ℹ️ Legal Notice and Disclaimer (Read carefully)"):
         st.markdown("""
-        **1. Natureza Informativa:** A **Valurise** é uma ferramenta de auxílio à decisão. As estimativas de preço, margens de lucro e descrições são geradas por Inteligência Artificial e não constituem aconselhamento financeiro ou profissional.
+        **1. Informational Nature:** **Valurise** is a decision-support tool. Price estimates, profit margins, and descriptions are generated by Artificial Intelligence and do not constitute financial or professional advice.
         
-        **2. Possibilidade de Erro:** Esta aplicação utiliza a tecnologia **Google Gemini**. Embora avançada, a IA pode ocasionalmente gerar informações imprecisas, desatualizadas ou incorretas.
+        **2. Possibility of Error:** This application uses **Google Gemini** technology. Although advanced, AI can occasionally generate inaccurate, outdated, or incorrect information.
         
-        **3. Responsabilidade do Utilizador:** Tu és o único responsável por verificar a veracidade das informações e o estado real dos itens antes de qualquer transação. A Valurise não se responsabiliza por eventuais perdas financeiras.
+        **3. User Responsibility:** You are solely responsible for verifying the accuracy of information and the actual condition of items before any transaction. Valurise is not responsible for any financial losses.
         
-        *Ao utilizar esta ferramenta, aceitas estes termos.*
+        *By using this tool, you accept these terms.*
         """)
         st.caption("Powered by Google Gemini AI • Valurise © 2026")
 
@@ -323,16 +353,16 @@ if "logado" not in st.session_state:
     st.session_state["logado"] = False
 
 if not st.session_state["logado"]:
-    st.title("🔒 Área Restrita")
+    st.title("🔒 Restricted Area")
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         entrada = st.text_input("Password:", type="password")
-        if st.button("Entrar", type="primary", use_container_width=True):
+        if st.button("Login", type="primary", use_container_width=True):
             if entrada == SENHA_SECRETA:
                 st.session_state["logado"] = True
                 st.rerun()
             else:
-                st.error("Senha errada!")
+                st.error("Wrong password!")
     st.stop()
 #=============================================
 if "historico_conversas" not in st.session_state: 
@@ -347,58 +377,107 @@ if "chat_history_single" not in st.session_state: st.session_state.chat_history_
 if "chat_session_single" not in st.session_state: st.session_state.chat_session_single = None
 #==============================================
 
-def calcular_taxa_ebay(categoria, preco_venda):
-    """Calcula a comissão do eBay baseada nas regras oficiais da tabela."""
-    tarifa_fixa = 0.35 # Tarifa por pedido padrão
+# --- 2. O MOTOR DE CÁLCULO DAS TAXAS ---
+def calculate_ebay_fees(region, seller_type, vat_registered, category, sale_price):
+    fees = 0.0
+    fixed_fee = 0.0
 
-    # 1. Calçado Esportivo (Sneakers)
-    if categoria == "Calçado Esportivo":
-        if preco_venda >= 150:
-            return preco_venda * 0.08 # 8% e isento da tarifa fixa
+    # ---------------- MERCADO EUA 🇺🇸 ----------------
+    if region == "🇺🇸 USA ($)":
+        fixed_fee = 0.30
+        
+        if category == "Sneakers":
+            if sale_price >= 150:
+                fees = (sale_price * 0.08) + 0.00 # Isento de taxa fixa acima de $150
+            else:
+                fees = (sale_price * 0.1325) + fixed_fee
+        
+        elif category == "Tech":
+            # Exemplo Tech EUA (podes afinar este valor depois se quiseres)
+            fees = (sale_price * 0.0635) + fixed_fee
+            
+        else: # Categoria Geral
+            fees = (sale_price * 0.1325) + fixed_fee
+
+    # ---------------- MERCADO UK 🇬🇧 ----------------
+    elif region == "🇬🇧 UK (£)":
+        if seller_type == "Private":
+            return 0.0 # A regra de ouro: Zero taxas!
+            
+        fixed_fee = 0.30
+        
+        if category == "Sneakers":
+            if sale_price >= 100:
+                fees = (sale_price * 0.07) + fixed_fee
+            else:
+                fees = (sale_price * 0.119) + fixed_fee
+                
+        elif category == "Tech":
+            if sale_price <= 400:
+                fees = (sale_price * 0.069) + fixed_fee
+            else:
+                fees = (400 * 0.069) + ((sale_price - 400) * 0.02) + fixed_fee
+                
+        else: # Categoria Geral (Clothes, etc)
+            fees = (sale_price * 0.119) + fixed_fee
+
+        # A "Rasteira" do IVA: Se é Business e NÃO está registado, o eBay cobra +20%
+        if seller_type == "Business" and vat_registered == "No":
+            fees = fees * 1.20
+
+    # ---------------- MERCADO EUROPA 🇪🇺 ----------------
+    elif region == "🇵🇹 Portugal (€)":
+        fixed_fee = 0.35
+
+        # 1. Calçado Esportivo (Sneakers)
+        if category == "Calçado Esportivo":
+            if sale_price >= 150:
+                return sale_price * 0.08 # 8% e isento da tarifa fixa
+            else:
+                return (sale_price * 0.136) + fixed_fee
+
+        # 2. Relógios de Luxo e Normais
+        elif category == "Relógios":
+            if sale_price >= 2000:
+                return (sale_price * 0.065) # 6.5% para relógios de luxo
+            else:
+                return (sale_price * 0.15) + fixed_fee # 15% para relógios normais
+
+        # 3. Guitarras e Baixos
+        elif category == "Guitarras e Baixos":
+            return (sale_price * 0.067) + fixed_fee # 6.7%
+
+        # 4. Livros, Filmes e Música
+        elif category == "Livros/Mídia":
+            return (sale_price * 0.153) + fixed_fee # 15.3%
+
+        # 5. Colecionáveis (Cartas, Moedas, Figuras)
+        elif category == "Colecionáveis":
+            return (sale_price * 0.1325) + fixed_fee # 13.25%
+
+        # 6. Eletrónica (Telemóveis, Consolas, Computadores)
+        elif category == "Eletrónica":
+            return (sale_price * 0.09) + fixed_fee # Geralmente ronda os 9%
+
+        # 7. Regra Geral (Para tudo o resto)
         else:
-            return (preco_venda * 0.136) + tarifa_fixa
-
-    # 2. Relógios de Luxo e Normais
-    elif categoria == "Relógios":
-        if preco_venda >= 2000:
-            return (preco_venda * 0.065) # 6.5% para relógios de luxo
-        else:
-            return (preco_venda * 0.15) + tarifa_fixa # 15% para relógios normais
-
-    # 3. Guitarras e Baixos
-    elif categoria == "Guitarras e Baixos":
-        return (preco_venda * 0.067) + tarifa_fixa # 6.7%
-
-    # 4. Livros, Filmes e Música
-    elif categoria == "Livros/Mídia":
-        return (preco_venda * 0.153) + tarifa_fixa # 15.3%
-
-    # 5. Colecionáveis (Cartas, Moedas, Figuras)
-    elif categoria == "Colecionáveis":
-        return (preco_venda * 0.1325) + tarifa_fixa # 13.25%
-
-    # 6. Eletrónica (Telemóveis, Consolas, Computadores)
-    elif categoria == "Eletrónica":
-        return (preco_venda * 0.09) + tarifa_fixa # Geralmente ronda os 9%
-
-    # 7. Regra Geral (Para tudo o resto)
-    else:
-        return (preco_venda * 0.136) + tarifa_fixa
+            return (sale_price * 0.136) + fixed_fee
+    return fees
 
 
 def analisar_imagem_json(image, custo, objetivo, sabe_custo):
     try:
         prompt_id = """
-        Atua como um scanner de inventário. Analisa a imagem e extrai:
-        1. OCR: Todo o texto da embalagem (Marca, Modelo, Tons, Edições).
-        2. BARCODE: Se houver um código de barras, extrai os números.
-        3. Se não houver barcode, identifica o modelo exato pelo design.
+        Act as an expert inventory scanner. Analyze the image and extract:
+        1. OCR: All text on the packaging (Brand, Model, Shades, Editions).
+        2. BARCODE: If visible, extract the numbers.
+        3. If no barcode, identify the exact model by design.
         
-        Além disso, classifica o item ESTRITAMENTE numa destas categorias do eBay: 
-        "Calçado Esportivo", "Relógios", "Eletrónica", "Guitarras e Baixos", "Livros/Mídia", "Colecionáveis" ou "Outros".
+        Classify the item STRICTLY into one of these eBay categories: 
+        "Sneakers", "Watches", "Electronics", "Guitars & Basses", "Books/Media", "Collectibles" or "Others".
         
-        Responde APENAS num formato JSON exato e válido, sem markdown:
-        {"produto": "Nome Comercial Completo + Código de Barras (se houver)", "categoria": "Categoria Escolhida"}
+        Respond ONLY in a valid JSON format. Provide the values in English, but keep these exact Portuguese keys:
+        {"produto": "Full Commercial Name + Barcode(if it has one)", "categoria": "Chosen Category"}
         """
         
         res_visao = client.models.generate_content(
@@ -454,7 +533,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
             # --- CÁLCULO DA IA PARA TAXAS ---
             portes_medios = sum(envios) / len(envios) if envios else 4.50
             # A magia acontece aqui: a comissão adapta-se à categoria e ao preço!
-            comissao_plataforma = calcular_taxa_ebay(categoria_item, p_venda) 
+            comissao_plataforma = calculate_ebay_fees(region, seller_type, vat_registered, categoria_item, p_venda) 
             taxas_estimadas = portes_medios + comissao_plataforma
             
             custo_real = 0 if not sabe_custo else custo
@@ -467,31 +546,31 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
             
             # Gerador de Estratégia
             if not sabe_custo:
-                estrategia = f"Mercado ativo ({len(precos)} vendas). Como não sabes o custo, qualquer compra que faças tem de deixar margem face aos {round(lucro, 2)}€ líquidos que sobram após taxas."
+                estrategia = f"Active market ({len(precos)} sales). Since you don't know the cost, any purchase you make must leave a margin given the {currency}{round(lucro, 2)} net profit remaining after fees."
             else:
                 if lucro < 0:
-                    estrategia = "❌ Prejuízo à vista! O custo e as taxas engolem o valor de venda. Devias tentar encontrar muito mais barato."
+                    estrategia = "❌ Loss ahead! The cost and fees devour the sale value. You should try to find it much cheaper."
                 elif lucro < 5:
-                    estrategia = "⚠️ Margem muito curta. Só vale a pena avançar se a venda for extremamente rápida."
+                    estrategia = "⚠️ Very tight margin. Only worth it if the sale is extremely fast."
                 elif lucro >= 15 and len(precos) > 5:
-                    estrategia = "🔥 Excelente negócio! Vais fazer bastante lucro e o mercado procura muito este item."
+                    estrategia = "🔥 Excellent deal! You'll make substantial profit and the market is eager for this item."
                 else:
-                    estrategia = "👍 Negócio sólido. Margem aceitável e mercado estável para venda."
+                    estrategia = "👍 Solid business. Acceptable margin and stable market for selling."
             
             if p_venda > 200:
-                estrategia += " ⚠️ VALOR ELEVADO: Este item parece ser de alta gama. Verifica sempre o link do eBay para confirmar edições especiais antes de investir."
+                estrategia += " ⚠️ HIGH VALUE: This item appears to be high-end. Always check the eBay link to confirm special editions before investing."
             
         else:
             # --- FALLBACK: A IA VIRA AVALIADORA QUANDO O EBAY FALHA ---
             prompt_estimativa = f"""
-            Não encontrei referências de vendas recentes no eBay para "{nome_item}". 
-            Atua como um avaliador especialista de artigos de revenda. Olha bem para a imagem, avalia o tipo de produto, a marca, os materiais e o estado aparente.
-            Dá-me um preço de venda realista em euros e uma breve justificação do porquê desse valor.
-            Responde APENAS neste formato JSON exato:
-            {{"preco": 25.0, "justificativa": "Apesar de não haver histórico, produtos similares desta marca/estilo costumam valer à volta de X devido a..."}}
+            I couldn't find recent sales references on eBay for "{nome_item}". 
+            Act as a specialist appraiser of resale items. Look carefully at the image, evaluate the product type, brand, materials and apparent condition.
+            Give me a realistic selling price in the local currency ({currency}) and a brief justification for that value.
+            Respond ONLY in this exact JSON format:
+            {{"preco": X, "justificativa": "Although there is no sales history, similar products from this brand/style usually sell for around X because..."}}
             """
             
-            try:
+            try:    
                 # Chamamos a IA de novo para olhar para a foto com o novo objetivo
                 res_estimativa = client.models.generate_content(
                     model='gemini-2.0-flash', 
@@ -504,7 +583,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
                 
                 # Extrair os valores que a IA imaginou
                 p_venda = float(dados_ia.get("preco", 0))
-                justificativa = dados_ia.get("justificativa", "Avaliação baseada no aspeto geral.")
+                justificativa = dados_ia.get("justificativa", "Evaluation based on general appearance.")
                 
                 # Fazer a matemática das taxas com a estimativa da IA
                 p_medio = p_venda 
@@ -522,14 +601,14 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
                 if lucro < 0: cor = "🔴"
                 elif lucro > 10: cor = "🟢"
                 
-                estrategia = f"Não encontrei este exato produto à venda, mas tendo em conta a minha análise visual: {justificativa}"
+                estrategia = f"I did not find any recent sales data for this item on eBay. My AI estimated the value based on visual inspection: {justificativa}"
                 
             except Exception as e:
                 # Se a IA se engasgar a tentar adivinhar, não crashamos, devolvemos 0
                 p_medio = p_venda = lucro = taxas_estimadas = 0
                 link_mercado = f"https://www.ebay.com/sch/i.html?_nkw={nome_item.replace(' ', '+')}"
                 cor = "⚪"
-                estrategia = "Não encontrei preços no mercado e a IA não conseguiu estimar o valor com precisão por esta imagem."
+                estrategia = "I did not find any recent sales data for this item on eBay and the AI could not estimate the value."
 
         return {
             "produto": nome_item,
@@ -544,8 +623,8 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
 
     except Exception as e:
         return {
-            "produto": "Erro de Leitura",
-            "estrategia_base": f"Erro técnico: {str(e)}",
+            "produto": "Read Error",
+            "estrategia_base": f"Technical Error: {str(e)}",
             "veredito_cor": "🔴"
         }
 def criar_chat_session(dados_completos):
@@ -564,22 +643,22 @@ def criar_chat_session(dados_completos):
 
     # Este é o "GPS" da IA. Ela agora sabe PORQUÊ respondeu aquilo.
     contexto_especialista = f"""
-    Atua como um Consultor Expert em Arbitragem e Revenda. 
-    Acabaste de analisar o seguinte produto:
+    Act as an Expert Consultant in Arbitrage and Reselling.
+    You have just analyzed the following product:
     
-    - PRODUTO: {nome}
-    - PREÇO MÉDIO NO EBAY EUROPA: {preco_medio}€
-    - TUA SUGESTÃO DE VENDA: {sugestao}€
-    - LUCRO ESTIMADO: {lucro}€
-    - VEREDITO: {veredito}
-    - LÓGICA APLICADA: {estrategia}
-    - REFERÊNCIA: {ref}
+    - PRODUCT: {nome}
+    - AVERAGE PRICE ON EBAY: {currency}{preco_medio}
+    - YOUR SUGGESTED SELLING PRICE: {currency}{sugestao}
+    - ESTIMATED PROFIT: {currency}{lucro}
+    - VERDICT: {veredito}
+    - APPLIED LOGIC: {estrategia}
+    - REFERENCE: {ref}
     
-    INSTRUÇÕES PARA A CONVERSA:
-    1. Explica o teu plano de ação: por que sugeriste este preço? (Ex: estratégia de venda rápida vs lucro máximo).
-    2. Se o veredito for 💎 (Raro), avisa o utilizador para não ter pressa e explicar que não há stock.
-    3. Se o utilizador perguntar "Vale a pena?", usa os dados de lucro para justificar (ex: "Sim, porque a margem é superior a 30%").
-    4. Mantém-te fiel aos dados da tabela, mas podes dar dicas de onde anunciar (Vinted, eBay, Wallapop).
+    INSTRUCTIONS FOR THE CONVERSATION:
+    1. Explain your action plan: why did you suggest this price? (Ex: fast-sale strategy vs maximum profit).
+    2. If the verdict is 💎 (Rare), warn the user not to rush and explain that there is no stock.
+    3. If the user asks "Is it worth it?", use the profit data to justify (ex: "Yes, because the margin is over 30%").
+    4. Stay true to the table data, but you can give tips on where to advertise (Vinted, eBay, Wallapop).
     """
     
     
@@ -588,7 +667,7 @@ def criar_chat_session(dados_completos):
         model='gemini-2.0-flash',
         history=[
             types.Content(role="user", parts=[types.Part.from_text(text=contexto_especialista)]),
-            types.Content(role="model", parts=[types.Part.from_text(text="Entendido. Estou pronto para explicar a estratégia deste produto.")])
+            types.Content(role="model", parts=[types.Part.from_text(text="Understood. I am ready to explain the strategy for this product.")])
         ]
     )
     return st.session_state.chat
@@ -597,23 +676,23 @@ def criar_chat_session(dados_completos):
 # ==========================================
 
 with st.sidebar:
-    st.header("⚙️ Painel")
+    st.header("⚙️ Panel")
     
     # 1. IDENTIFICAÇÃO E CRÉDITOS
     if st.session_state.email_logado:
         st.success(f"👤 {st.session_state.email_logado}")
         if st.session_state.email_logado in ADMINS:
-            st.metric(label="Plano", value="👑 ADMIN / Ilimitado")
+            st.metric(label="Plan", value="👑 ADMIN / Unlimited")
         else:
             saldo_atual = obter_saldo_visual(st.session_state.email_logado)
-            st.metric(label="Créditos Disponíveis", value=f"{saldo_atual} / 1")
+            st.metric(label="Credits available", value=f"{saldo_atual} / 1")
         # ------------------------------
 
-        if st.button("🚪 Sair / Mudar Conta"):
+        if st.button("🚪 Exit / Change Account"):
             st.session_state.email_logado = None
             st.rerun()
     else:
-        st.warning("Pendente login...")
+        st.warning("No user logged in.")
 
     st.divider()
 
@@ -621,47 +700,47 @@ with st.sidebar:
 # 📱 INTERFACE
 # ==========================================
 # No ecrã de Login
-st.title("💎 Valurise (Versão Beta)")
+st.title("💎 Valurise (Beta Version)")
 
 if not st.session_state.email_logado:
-    st.info("👋 Está convidado para testar o protótipo da Valurise.")
+    st.info("👋 You are invited to test the Valurise prototype.")
     
     col1, col2 = st.columns([3, 1])
     with col1:
-        email_input = st.text_input("Email (apenas para criar conta):")
+        email_input = st.text_input("Email (just to create account):")
         
         # Checkbox Simples e Direta
-        termos = st.checkbox("Aceito participar no teste Beta e compreendo que a IA pode cometer erros.")
+        termos = st.checkbox("I accept to participate in the Beta test and understand that the AI may make mistakes.")
 
     with col2:
         st.write("")
         st.write("")
-        if st.button("Entrar", type="primary"):
+        if st.button("Access Beta", type="primary"):
             if not termos:
-                st.warning("Precisa de aceitar para testar.")
+                st.warning("You must accept the terms to test.")
             elif "@" not in email_input:
-                st.warning("Email inválido.")
+                st.warning("Invalid email.")
             else:
                 st.session_state.email_logado = email_input
                 st.rerun()
 
     # Rodapé simples (sem moradas nem NIFs)
-    with st.expander("ℹ️ Sobre este teste"):
+    with st.expander("ℹ️ About This Prototype and Data Usage"):
         st.markdown("""
-        **O que é isto?**
-        Este é um protótipo criado por um programador independente para fins de teste.
+        **What is this?**
+        This is a prototype created by an independent developer for testing purposes.
         
-        **Os teus dados:**
-        O teu email serve apenas para entrares na conta. Não será vendido, partilhado nem usado para spam.
+        **Your data:**
+        Your email is only used to log into your account. It will not be sold, shared, or used for spam.
         
-        **Isenção de Responsabilidade:**
-        Os valores apresentados são estimativas de IA (Gemini). Verifica sempre os preços reais antes de vender.
+        **Disclaimer:**
+        The values presented are AI (Gemini) estimates. Always verify actual prices before selling.
         """)
     
     st.stop()
 
 # Se chegou aqui, o email_logado já existe!
-st.sidebar.write(f"👤 Utilizador: **{st.session_state.email_logado}**")
+st.sidebar.write(f"👤 User: **{st.session_state.email_logado}**")
 
 # Gestão de Sessão (Memória)
 if "single_result" not in st.session_state: st.session_state.single_result = None
@@ -677,7 +756,7 @@ if "historico_conversas" not in st.session_state: st.session_state.historico_con
 if "id_conversa_ativa" not in st.session_state: st.session_state.id_conversa_ativa = None
 
 # ONDE SUBSTITUIR: Procura onde tens "aba1, aba2 = st.tabs(..."
-aba1, aba2, aba3, aba_historico = st.tabs(["🔍 Análise Individual", "📦 Bulk", "📰 Notícias","📜 Histórico"])
+aba1, aba2, aba3, aba_historico = st.tabs(["🔍 Single Analysis", "📦 Bulk", "📰 News", "📜 History"])
 
 
 # -----------------------------------------------------------------------------
@@ -693,26 +772,26 @@ with aba1:
     col_input, col_res = st.columns([1, 2])
     
     with col_input:
-        st.write("### 1. Dados")
-        objetivo_single = st.radio("Qual o objetivo?", ["Vender", "Comprar"], horizontal=True, key="obj_single_final")
+        st.write("### 1. Item Data")
+        objetivo_single = st.radio("Goal?", ["Sell", "Buy"], horizontal=True, key="obj_single_final")
 
         # Gestão de custos/estado
         if "temp_custo_ia" in st.session_state:
             st.session_state['single_cost'] = st.session_state.temp_custo_ia
             del st.session_state.temp_custo_ia
 
-        foto_single = st.file_uploader("Carregar Foto", type=["jpg", "png"], key="single_up_final")
+        foto_single = st.file_uploader("Upload Photo", type=["jpg", "png"], key="single_up_final")
         
         # --- NOVA CHECKBOX DE CUSTO ---
-        sabe_custo_single = not st.checkbox("Não sei o custo do item", key="check_custo_single")
-        custo_single = st.number_input("Custo (€)", min_value=0.0, step=1.0, key="single_cost_final", disabled=not sabe_custo_single)
+        sabe_custo_single = not st.checkbox("I don't know the item cost", key="check_custo_single")
+        custo_single = st.number_input(f"Cost ({currency})", min_value=0.0, step=1.0, key="single_cost_final", disabled=not sabe_custo_single)
 
         # --- BOTÃO DE ANÁLISE COM TRAVAS DE SEGURANÇA ---
-        if st.button("🚀 Analisar Item", type="primary"):
+        if st.button("🚀 Analyse Item", type="primary"):
             if foto_single:
                 # 🛡️ TRAVA 1: Limite Global Antibot (1400/dia)
                 if trava_seguranca_global():
-                    st.error("🛑 O sistema atingiu o limite de bónus diário (1400/1500). Tenta novamente amanhã!")
+                    st.error("🛑 The system has reached the daily bonus limit (1400/1500). Try again tomorrow!")
                     st.stop()
 
                 # POR ISTO:
@@ -725,7 +804,7 @@ with aba1:
                 
                 # --- CENÁRIO A: MODO SIMULAÇÃO (Para testes sem gastar API) ---
                 if modo_simulacao:
-                    with st.spinner("A simular análise..."):
+                    with st.spinner("Simulating AI analysis..."):
                         # Registar no contador global para monitorizar tráfego mesmo em simulação
                         supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                         
@@ -736,7 +815,7 @@ with aba1:
                 # --- CENÁRIO B: MODO REAL (Gasta Google Grounding) ---
                 else:
                     if pode_avancar:
-                        with st.spinner(f"A analisar com IA Real... (Saldo: {saldo})"):
+                        with st.spinner(f"Analyzing with Real AI... (Balance: {saldo})"):
                             # 1. Registar pedido no contador global de 1400
                             supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                             
@@ -760,7 +839,7 @@ with aba1:
                         # Se não tem créditos, abre o pop-up de venda
                         popup_upgrade()
             else:
-                st.warning("Por favor, carrega uma foto primeiro.")
+                st.warning("Please upload a photo first.")
 
     # -------------------------------------------------------------------------
     # MOSTRAR RESULTADOS E CHAT (COLUNA DA DIREITA)
@@ -771,12 +850,12 @@ with aba1:
         # Preparar Resumo para o histórico/chat (Atualizado para dados do eBay)
         texto_resumo = f"""**{dados['veredito_cor']} {dados['produto']}**
 
-💰 **Preço Médio (Europa):** {dados.get('preco_medio', 0)}€
-🚀 **Sugestão de Venda:** {dados.get('sugestao_venda', 0)}€
-💸 **Taxas Estimadas:** {dados.get('taxas_estimadas', 0)}€
-💶 **Lucro Líquido:** {dados.get('lucro_estimado', 0)}€
+💰 **Avg Price:** {currency}{dados.get('preco_medio', 0)}
+🚀 **Target Price:** {currency}{dados.get('sugestao_venda', 0)}
+💸 **Est. Fees:** {currency}{dados.get('taxas_estimadas', 0)}
+💶 **Net Profit:** {currency}{dados.get('lucro_estimado', 0)}
 
-📊 **Análise:** {dados.get('estrategia_base', '')}
+📊 **Strategy:** {dados.get('estrategia_base', '')}
 """
         # Guardar no histórico da barra lateral se for um ID novo
         if "ultimo_id_salvo" not in st.session_state or st.session_state.ultimo_id_salvo != dados['id_unico']:
@@ -788,7 +867,7 @@ with aba1:
 
             st.session_state.chat_history_single = []
             st.session_state.chat_session_single = criar_chat_session(dados)
-            primeira_resposta = "Olá! Analisei as referências do eBay para este item. Como posso ajudar no teu plano de venda?"
+            primeira_resposta = "Hello! I've analyzed the eBay references for this item. How can I help with your selling plan?"
             st.session_state.chat_history_single.append({"role": "assistant", "content": primeira_resposta})
             
             nova_sessao = {
@@ -816,21 +895,23 @@ with aba1:
                     with st.chat_message(msg["role"]): 
                         st.markdown(msg["content"])
 
-            if prompt := st.chat_input("Faz uma pergunta sobre este produto...", key="chat_input_unico"):
+            if prompt := st.chat_input("Ask a question about this item...", key="chat_input_unico"):
                 st.session_state.chat_history_single.append({"role": "user", "content": prompt})
                 with container_chat:
                     with st.chat_message("user"): 
                         st.markdown(prompt)
                     with st.chat_message("assistant"):
                         if modo_simulacao: 
-                            resp = f"Simulação de resposta para: {prompt}"
+                            resp = f"Simulation response for: {prompt}"
                         else:
                             try: 
                                 resp = st.session_state.chat_session_single.send_message(prompt).text
                             except: 
-                                resp = "Desculpa, ocorreu um erro ao processar a tua pergunta."
+                                resp = "Sorry, an error occurred while processing your question."
                         st.markdown(resp)
                         st.session_state.chat_history_single.append({"role": "assistant", "content": resp})
+
+
 # ABA 2: BULK (COM CONSUMO DE CRÉDITOS POR ITEM)
 # -----------------------------------------------------------------------------
 
@@ -838,33 +919,32 @@ with aba1:
 # ABA 2: BULK (COM CONSUMO DE CRÉDITOS E TRAVA GLOBAL POR ITEM)
 # -----------------------------------------------------------------------------
 with aba2:
-    st.write("### 1. Configurar Lote")
-    modo_geral = st.radio("O que é este lote?", ["🛒 Tudo para Comprar", "🏠 Tudo para Vender", "🔀 Misto (Decidir 1 a 1)"], horizontal=True)
-    fotos_bulk = st.file_uploader("Carregar Fotos", type=["jpg", "png"], accept_multiple_files=True, key="bulk_up")
+    st.write("### 1. Configure Batch")
+    modo_geral = st.radio("What is this batch?", ["🛒 All for Buying", "🏠 All for Selling", "🔀 Mixed (Decide 1 by 1)"], horizontal=True)
+    fotos_bulk = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="bulk_up")
     
     if fotos_bulk:
         if "tabela_editavel" not in st.session_state or len(st.session_state.tabela_editavel) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
-                # ADICIONAMOS AQUI O "NÃO SEI CUSTO"
-                dados_iniciais.append({"Ficheiro": f.name, "Input (€)": 0.0, "Não sei custo": False, "Objetivo": "Vender"})
+                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Action": "Sell"})
             st.session_state.tabela_editavel = pd.DataFrame(dados_iniciais)
         
         col_config = {}
-        if "Misto" in modo_geral:
-            col_config["Objetivo"] = st.column_config.SelectboxColumn("Ação", width="medium", options=["Vender", "Comprar"], required=True)
-            colunas_visiveis = ["Ficheiro", "Input (€)", "Não sei custo", "Objetivo"]
+        if "Mixed" in modo_geral:
+            col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
+            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost", "Action"]
         else:
-            colunas_visiveis = ["Ficheiro", "Input (€)", "Não sei custo"]
+            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost"]
         
         tabela_editada = st.data_editor(st.session_state.tabela_editavel[colunas_visiveis], num_rows="dynamic", use_container_width=True, key="editor_bulk", column_config=col_config)
         
-        if "Misto" in modo_geral: st.session_state.tabela_editavel = tabela_editada
+        if "Mixed" in modo_geral: st.session_state.tabela_editavel = tabela_editada
         else: st.session_state.tabela_editavel.update(tabela_editada)
 
-        if st.button("🚀 Processar Lote"):
+        if st.button("🚀 Process Bulk"):
             if not st.session_state.get('email_logado'):
-                st.warning("⚠️ Precisas de introduzir o teu e-mail primeiro.")
+                st.warning("⚠️ You must be logged in to process bulk items.")
             else:
                 st.session_state.bulk_results = []
                 st.session_state.bulk_images = {}
@@ -874,23 +954,23 @@ with aba2:
                 for i, row in st.session_state.tabela_editavel.iterrows():
                     # --- 🛡️ 1. TRAVAS DE SEGURANÇA ---
                     if trava_seguranca_global():
-                        st.error(f"🛑 Limite global atingido. Parou no item {i+1}.")
+                        st.error(f"🛑 Global limit reached. Stopped at item {i+1}.")
                         break
 
                     pode_avancar, saldo = gerir_creditos(st.session_state.email_logado)
                     if not modo_simulacao and not pode_avancar:
-                        st.warning(f"⚠️ Créditos esgotados no item {i+1}.")
+                        st.warning(f"⚠️ Credits exhausted on item {i+1}.")
                         popup_upgrade()
                         break
 
                     # --- 2. DEFINIÇÃO DE DADOS DO ITEM ---
-                    nome_fich = row["Ficheiro"]
-                    custo = row["Input (€)"]
-                    sabe_custo_bulk = not row.get("Não sei custo", False)
+                    nome_fich = row["File"]
+                    custo = row[f"Cost ({currency})"]
+                    sabe_custo_bulk = not row.get("Unknown Cost", False)
                     
-                    if "Comprar" in modo_geral: objetivo_final = "Comprar"
-                    elif "Vender" in modo_geral: objetivo_final = "Vender"
-                    else: objetivo_final = row["Objetivo"]
+                    if "Buying" in modo_geral: objetivo_final = "Comprar"
+                    elif "Selling" in modo_geral: objetivo_final = "Vender"
+                    else: objetivo_final = row["Action"]
 
                     foto_real = next((f for f in fotos_bulk if f.name == nome_fich), None)
                     
@@ -918,12 +998,12 @@ with aba2:
                             # Detetar erro de Limite (429)
                             if "429" in str(dados) or "Resource exhausted" in str(dados):
                                 tentativas += 1
-                                st.warning(f"⏳ Google ocupado. Tentativa {tentativas}/3 para '{nome_fich}'. A aguardar...")
+                                st.warning(f"⏳ Google busy. Attempt {tentativas}/3 for '{nome_fich}'. Waiting...")
                                 time.sleep(10 * tentativas) 
                             
                             # Detetar outros erros
                             elif "Erro" in dados.get("produto", ""):
-                                st.error(f"❌ Erro no item {nome_fich}: {dados.get('estrategia_base')}")
+                                st.error(f"❌ Error in item {nome_fich}: {dados.get('estrategia_base')}")
                                 break 
                             
                             else:
@@ -932,19 +1012,19 @@ with aba2:
                                     gastar_credito(st.session_state.email_logado)
 
                         # --- 4. GUARDAR RESULTADOS (APENAS SE TEVE SUCESSO) ---
-                        # --- 4. GUARDAR RESULTADOS (APENAS SE TEVE SUCESSO) ---
+            
                         if sucesso:
                             st.session_state.bulk_results.append({
-                                "Ficheiro": nome_fich,
-                                "Input (€)": custo,
-                                "Produto": dados.get('produto', 'Desconhecido'),
-                                "Veredito": dados.get('veredito_cor', '🟡'),
-                                "Preço Médio": f"{dados.get('preco_medio', 0)}€",
-                                "Sugestão": f"{dados.get('sugestao_venda', 0)}€",
-                                "Taxas Est.": f"{dados.get('taxas_estimadas', 0)}€",
-                                "Lucro Líquido": "Pendente" if dados.get('veredito_cor') == "💎" else f"{dados.get('lucro_estimado')}€",
-                                "Estratégia": dados.get('estrategia_base'),
-                                "Validar Mercado": dados.get('link_pesquisa', ''),
+                                "File": nome_fich,
+                                f"Cost ({currency})": f"{currency}{custo}",
+                                "Item": dados.get('produto', 'Unknown'),
+                                "Verdict": dados.get('veredito_cor', '🟡'),
+                                f"Avg Price ({currency})": f"{currency}{dados.get('preco_medio', 0)}",
+                                f"Target Price ({currency})": f"{currency}{dados.get('sugestao_venda', 0)}",
+                                f"Est. Fees ({currency})": f"{currency}{dados.get('taxas_estimadas', 0)}",
+                                f"Net Profit ({currency})": "Pending" if dados.get('veredito_cor') == "💎" else f"{currency}{dados.get('lucro_estimado')}",
+                                "Strategy": dados.get('estrategia_base'),
+                                "Market Link": dados.get('link_pesquisa', ''),
                                 "Raw": dados
                             })
                             guardar_no_historico(dados, objetivo_final,st.session_state.email_logado)
@@ -952,38 +1032,37 @@ with aba2:
                     barra.progress((i+1)/total_items)
                 
                 if st.session_state.bulk_results:
-                    st.success("✅ Processamento concluído (ou interrompido por limites).")
+                    st.success("✅ Processing completed (or interrupted by limits).")
 
-    # MOSTRAR TABELA DE RESULTADOS
-    # MOSTRAR TABELA DE RESULTADOS
+
     # MOSTRAR TABELA DE RESULTADOS
     if st.session_state.bulk_results:
         st.divider()
-        st.write("### 📊 Relatório do Lote")
+        st.write("### 📊 Report of the Bulk")
         df_res = pd.DataFrame(st.session_state.bulk_results)
         cols_para_tabela = [c for c in df_res.columns if c != "Raw"]
         st.dataframe(df_res[cols_para_tabela], use_container_width=True)
         
         try:
             excel_data = converter_para_excel(df_res)
-            st.download_button("📥 Baixar Excel", excel_data, "relatorio_valurise.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("📥 Download Excel", excel_data, "relatorio_valurise.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
-            st.error(f"⚠️ Erro ao gerar o ficheiro Excel: {e}")
+            st.error(f"⚠️ Error generating Excel file: {e}")
         
         st.write("---")
-        opcoes = [row["Ficheiro"] for row in st.session_state.bulk_results]
+        opcoes = [row["File"] for row in st.session_state.bulk_results]
         if opcoes:
-            escolha = st.selectbox("Conversar sobre qual item?", opcoes, key="seletor_bulk")
+            escolha = st.selectbox("Chat about which item?", opcoes, key="seletor_bulk")
             if escolha != st.session_state.current_bulk_item:
                 st.session_state.current_bulk_item = escolha
                 st.session_state.chat_history_bulk = [] 
-                item_dados = next(r for r in st.session_state.bulk_results if r["Ficheiro"] == escolha)
+                item_dados = next(r for r in st.session_state.bulk_results if r["File"] == escolha)
                 img_selecionada = st.session_state.bulk_images.get(escolha)
                 if img_selecionada:
                     st.session_state.chat_session_bulk = criar_chat_session(item_dados['Raw'])
                     nome_prod = item_dados['Produto']
                     veredito = item_dados['Veredito']
-                    boas_vindas = f"👋 Estou pronto para discutir o item **{nome_prod}** {veredito}. \n\nBaseado nas referências que encontrei, queres saber mais sobre a estratégia de preço ou como preparar o anúncio?"
+                    boas_vindas = f"👋 Im ready to chat about **{nome_prod}** {veredito}. \n\nBased on the references I found, do you want to know more about the pricing strategy or how to prepare the ad?"
                     st.session_state.chat_history_bulk.append({"role": "assistant", "content": boas_vindas})
 
             container_chat_bulk = st.container(height=400)
@@ -991,7 +1070,7 @@ with aba2:
                 for msg in st.session_state.chat_history_bulk:
                     with st.chat_message(msg["role"]): st.markdown(msg["content"])
             
-            if prompt_bulk := st.chat_input("Perguntar sobre este item...", key="chat_in_bulk"):
+            if prompt_bulk := st.chat_input("Ask about this item...", key="chat_in_bulk"):
                 st.session_state.chat_history_bulk.append({"role": "user", "content": prompt_bulk})
                 
                 with container_chat_bulk:
@@ -1009,7 +1088,7 @@ with aba2:
                                 response = st.session_state.chat_session_bulk.send_message(prompt_bulk)
                                 resp = response.text
                             else:
-                                resp = f"Erro inesperado: {e}"
+                                resp = f"Unexpected error: {e}"
                         
                         st.markdown(resp)
                         st.session_state.chat_history_bulk.append({"role": "assistant", "content": resp})
@@ -1022,8 +1101,8 @@ with aba2:
 # ABA 3: RADAR DE MERCADO (NOTÍCIAS)
 # -----------------------------------------------------------------------------
 with aba3:
-    st.header("📈 Tendências e Oportunidades")
-    st.write("Fica atento às variações de preços e dicas semanais para maximizares o teu lucro.")   
+    st.header("📈 Trends and Opportunities")
+    st.write("Stay alert to price variations and weekly tips to maximize your profit.")   
     st.divider()
 
     try:
@@ -1054,15 +1133,15 @@ with aba3:
                             # Ícone genérico se não houver imagem
                             st.markdown("# 🗞️")
         else:
-            st.info("Ainda não há notícias publicadas esta semana. Volta em breve!")
+            st.info("There are no news published this week yet. Come back soon!")
 
     except Exception as e:
-        st.error("Erro ao carregar as notícias.")
+        st.error("Error loading news.")
         # Se quiseres ver o erro real para debug, descomenta a linha abaixo:
         # st.write(e)
 
 with aba_historico:
-    st.subheader("📜 Registo Geral de Análises")
+    st.subheader("📜 General Record of Analyses")
     
     # Procurar dados no Supabase
     res = supabase.table("historico_scans").select("*").eq("email", st.session_state.email_logado).order("created_at", desc=True).execute()
@@ -1079,32 +1158,33 @@ with aba_historico:
         st.dataframe(
             df_display,
             column_config={
-                "link_mercado": st.column_config.LinkColumn("Link eBay"),
-                "lucro_estimado": st.column_config.NumberColumn("Lucro (€)", format="%.2f €"),
-                "cor": "Veredito"
+                "produto": "Item Name",
+                "preco_medio": st.column_config.NumberColumn(f"Avg Price ({currency})", format=f"%.2f {currency}"),
+                "sugestao_venda": st.column_config.NumberColumn(f"Target Price ({currency})", format=f"%.2f {currency}"),
+                "taxas_estimadas": st.column_config.NumberColumn(f"Est. Fees ({currency})", format=f"%.2f {currency}"),
+                "lucro_estimado": st.column_config.NumberColumn(f"Net Profit ({currency})", format=f"%.2f {currency}"),
+                "link_mercado": st.column_config.LinkColumn("eBay Link"),
+                "estrategia": "Strategy",
+                "objetivo": "Goal",
+                "cor": "Verdict"
             },
             use_container_width=True,
             hide_index=True
         )
         
-        if st.button("🗑️ Limpar Todo o Histórico"):     
+        if st.button("🗑️ Clear All History"):     
             try:
                 # O Supabase exige um filtro para o delete, por isso dizemos "onde ID não seja 0"
                 supabase.table("historico_scans").delete().eq("email", st.session_state.email_logado).execute()
                 
-                st.success("🧹 Histórico completamente limpo!")
+                st.success("🧹 History completely cleared!")
                 time.sleep(1) # Pequena pausa para a mensagem de sucesso piscar no ecrã
                 st.rerun()    # Atualiza a página para a tabela vazia aparecer
                 
             except Exception as e:
-                st.error(f"Erro ao limpar histórico: {e}")
+                st.error(f"Error clearing history: {e}")
     else:
-        st.info("Ainda não tens produtos no histórico. Começa a analisar para popular esta tabela!")
+        st.info("There are no products in the history yet. Start analyzing to populate this table!")
 
-# ==========================================
-# ⚖️ RODAPÉ LEGAL (Fica fora das abas)
-# ==========================================
-# Como usas st.stop() no login lá em cima, este código só corre
-# se o utilizador já estiver logado, por isso é seguro pôr aqui.
 
 mostrar_rodape_legal()
