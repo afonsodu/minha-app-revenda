@@ -1016,25 +1016,32 @@ with aba2:
     fotos_bulk = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="bulk_up")
     
     if fotos_bulk:
+            # 1. Criar o "Cofre" se for a primeira vez ou se adicionares/removeres fotos
         if "tabela_editavel" not in st.session_state or len(st.session_state.tabela_editavel) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
                 dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Used", "Action": "Sell"})
             st.session_state.tabela_editavel = pd.DataFrame(dados_iniciais)
-        
+            
+            # 2. Configurar as colunas (Dropdowns)
         col_config = {
-            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"])
-        }
+                "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"])
+            }
+            
+            # 3. O SEGREDO: Em vez de cortarmos o DataFrame, escondemos a coluna visualmente!
         if "Mixed" in modo_geral:
-            col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
-            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost", "Condition", "Action"]
+                col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
         else:
-            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost", "Condition"]
-        
-        tabela_editada = st.data_editor(st.session_state.tabela_editavel[colunas_visiveis], num_rows="dynamic", use_container_width=True, key="editor_bulk", column_config=col_config)
-        
-        if "Mixed" in modo_geral: st.session_state.tabela_editavel = tabela_editada
-        else: st.session_state.tabela_editavel.update(tabela_editada)
+                col_config["Action"] = None  # Isto diz ao Streamlit "oculta isto", mas não cria cópias na memória!
+            
+            # 4. Gravar as edições DIRETAMENTE no cofre, passando a tabela inteira
+        st.session_state.tabela_editavel = st.data_editor(
+                st.session_state.tabela_editavel, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                key="editor_bulk", 
+                column_config=col_config
+            )
 
         if st.button("🚀 Process Bulk"):
             if not st.session_state.get('email_logado'):
