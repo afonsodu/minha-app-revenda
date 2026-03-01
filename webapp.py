@@ -575,38 +575,39 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                     except:
                         custo_envio = 4.50
 
-                    # Bloqueia portes internacionais absurdos (>30) que destroem o lucro
-                    if custo_envio > 30.0:
-                        continue
-
+            
                     dados_validados.append({"preco": valor, "envio": custo_envio})
             except:
                 continue
 
         # --- PASSO 3: MOTOR DE PUREZA ESTATÍSTICA (AMOSTRA GRANDE) ---
+        # --- PASSO 3: MOTOR DE PUREZA ESTATÍSTICA (VERSÃO EQUILIBRADA) ---
         if dados_validados:
             lista_precos = [d["preco"] for d in dados_validados]
             mediana_real = np.median(lista_precos)
             
-            # Filtro de Chão e Teto (Teto agora é 1.6x a mediana)
+            # 1. Filtro de Chão (Suavizado para 35% e 15%)
             if condicao == "Brand New":
-                dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.45)]
+                dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.35)]
             else:
-                dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.20)]
+                dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.15)]
             
-            dados_validados = [d for d in dados_validados if d["preco"] <= (mediana_real * 1.6)]
+            # 2. Filtro de Teto (Alargado para 1.8x)
+            # Ex: Se a mediana for 50€, aceitamos preços até 90€. Corta na mesma consolas de 160€!
+            dados_validados = [d for d in dados_validados if d["preco"] <= (mediana_real * 1.8)]
             
-            # Guilhotina de Desvio Padrão
-            if len(dados_validados) >= 4:
+            # 3. Guilhotina de Desvio Padrão (Mais justa)
+            if len(dados_validados) >= 3:
                 lista_atualizada = [d["preco"] for d in dados_validados]
                 media_bruta = np.mean(lista_atualizada)
                 desvio = np.std(lista_atualizada)
                 
+                # 1.5 é o padrão de ouro estatístico. Retém dados normais e apaga só os absurdos.
                 dados_seguros = [d for d in dados_validados if abs(d["preco"] - media_bruta) <= (desvio * 1.5)]
                 if dados_seguros:
                     dados_validados = dados_seguros
 
-            # Cálculo Final (Só avança se sobraram pelo menos 2 anúncios de confiança)
+            # 4. Exigimos apenas 2 anúncios sobreviventes
             if len(dados_validados) >= 2:
                 p_medio = sum(d["preco"] for d in dados_validados) / len(dados_validados)
                 portes_medios = sum(d["envio"] for d in dados_validados) / len(dados_validados)
