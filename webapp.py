@@ -576,31 +576,38 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                 continue
 
       
-        # --- PASSO 3: LÓGICA DE NEGÓCIO COM TAXAS AUTOMÁTICAS (FILTRO PREDOMINANTE) ---
+        # --- PASSO 3: MOTOR DE PUREZA DE DADOS (AVERAGE PRICE) ---
         if precos:
-            # 1. FILTRO DE SOBREVIVÊNCIA "BRAND NEW" (Anti-Peças)
-            if condicao == "Brand New" and len(precos) > 0:
-                # Um item novo selado nunca custa menos de 30% do valor do item mais caro encontrado
-                # Isto elimina bolsas de 11€ imediatamente se o topo for 150€
-                preco_max = max(precos)
-                precos = [p for p in precos if p >= (preco_max * 0.30)]
-
-            # 2. O FILTRO PREDOMINANTE: DESVIO PADRÃO (Agressivo)
+            # 1. Achar o verdadeiro "Centro" da multidão (A Mediana é imune a preços estúpidos)
+            mediana_real = np.median(precos)
+            
+            # 2. FILTRO DE CHÃO (Mata as bolsas de 11€ e os cabos de 5€)
+            if condicao == "Brand New":
+                # Um item novo nunca custa menos de 45% do valor normal do mercado
+                precos = [p for p in precos if p >= (mediana_real * 0.45)]
+            else:
+                # Um usado não custa menos de 20% (protege contra "só a caixa")
+                precos = [p for p in precos if p >= (mediana_real * 0.20)]
+                
+            # 3. FILTRO DE TETO (Mata os Bundles, Scalpers e Edições "Edge/Modded")
+            # Ignora coisas que custam quase o dobro do normal
+            precos = [p for p in precos if p <= (mediana_real * 1.8)]
+            
+            # 4. GUILHOTINA FINAL (Desvio Padrão para apertar a precisão)
             if len(precos) > 2:
                 media_bruta = np.mean(precos)
-                desvio_padrao = np.std(precos)
-                
-                # A Guilhotina: Só aceita preços que estejam muito próximos da média (Distância <= 1 Desvio Padrão)
-                # Prefere apagar bons dados do que aceitar lixo!
-                precos_filtrados = [p for p in precos if abs(p - media_bruta) <= desvio_padrao]
-                
-                # Se sobrar algum dado após esta limpeza extrema, usamos a lista limpa
-                if len(precos_filtrados) > 0:
-                    precos = precos_filtrados
-            
-            # 3. Média Final Purificada
-            p_medio = sum(precos) / len(precos) if precos else 0.0
-            p_venda = p_medio * 0.9
+                desvio = np.std(precos)
+                # Usamos 1.25 desvios para não ser tão apertado ao ponto de dar zero, mas justo o suficiente
+                precos_seguros = [p for p in precos if abs(p - media_bruta) <= (desvio * 1.25)]
+                if precos_seguros: # Garante que não apaga tudo se houver muita variação
+                    precos = precos_seguros
+
+            # 5. CÁLCULO DA MÉDIA PURA
+            if precos:
+                p_medio = sum(precos) / len(precos)
+                p_venda = p_medio * 0.9 
+            else:
+                p_medio = p_venda = 0.0
             
             # --- CÁLCULO DA IA PARA TAXAS ---
             portes_medios = sum(envios) / len(envios) if envios else 4.50
