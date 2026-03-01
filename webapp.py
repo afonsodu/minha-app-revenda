@@ -536,7 +536,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         
         # --- PASSO 2: CONSULTA AO MOTOR EBAY ---
         token = garantir_token_ebay()
-        dados_ebay = buscar_precos_ebay(token, nome_item)
+        dados_ebay = buscar_precos_ebay(token, nome_item, marketplace_id=marketplace_atual)
         
         item_summaries = dados_ebay.get('itemSummaries', [])
         precos = []

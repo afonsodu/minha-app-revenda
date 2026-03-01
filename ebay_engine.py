@@ -18,14 +18,14 @@ def get_ebay_token(app_id, cert_id):
     response = requests.post(url, headers=headers, data=data)
     return response.json().get("access_token")
 
-def buscar_precos_ebay(token, produto):
+def buscar_precos_ebay(token, produto, marketplace_id="EBAY_US"):
     """Procura itens vendidos para calcular a média real"""
-    # Usamos a Browse API para procurar itens em Portugal/Europa
-    url = f"https://api.ebay.com/buy/browse/v1/item_summary/search?q={produto}&filter=itemConditions:{{USED}}&limit=20"
+    # Removemos o filtro USED do eBay. O nosso código Python (Guilhotina) é que faz o filtro das condições agora!
+    url = f"https://api.ebay.com/buy/browse/v1/item_summary/search?q={produto}&limit=20"
     
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_GB", 
+        "X-EBAY-C-MARKETPLACE-ID": marketplace_id, # <--- AGORA É DINÂMICO (US, UK ou PT)
         "Accept-Language": "en-US",            
         "Content-Type": "application/json"
     }
