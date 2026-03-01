@@ -465,37 +465,45 @@ def calculate_ebay_fees(region, seller_type, vat_registered, category, sale_pric
     return fees
 
 
-# --- SISTEMA DE FILTRO DE CONDIÇÃO ---
-HARD_REJECT = ["for parts", "for part", "not working", "broken", "faulty", "defective", "spares or repair", "spares and repair", "parts only", "repair only", "non functional", "does not work", "don't work", "damaged", "cracked"]
-LIKELY_INCOMPLETE = ["missing", "no battery", "no charger", "no box", "no cable", "no cables", "no controller", "no remote", "no power supply", "no psu", "no accessories", "without charger", "without battery", "without box", "without accessories", "unit only", "console only", "tablet only", "device only", "base unit only", "main unit only"]
-SUSPECT = ["untested", "test not done", "unable to test", "not tested", "unknown condition", "read description", "see description", "as is", "as-is", "no returns", "open box", "used condition", "fair condition"]
-POSITIVE = ["complete", "fully working", "full set", "all accessories", "includes charger", "includes box", "includes accessories", "original box included", "excellent condition", "perfect working"]
+# --- SISTEMA DE FILTRO DE CONDIÇÃO AVANÇADO ---
+HARD_REJECT = ["for parts", "for part", "not working", "broken", "faulty", "defective", "spares or repair", "spares and repair", "parts only", "repair only", "non functional", "does not work", "don't work", "damaged", "cracked","para peças", "avariado", "estragado", "partido", "defeito", "não funciona"]
+LIKELY_INCOMPLETE = ["missing", "no battery", "no charger", "no box", "no cable", "no cables", "no controller", "no remote", "no power supply", "no psu", "no accessories", "without charger", "without battery", "without box", "without accessories", "unit only", "console only", "tablet only", "device only", "base unit only", "main unit only","em falta", "falta", "sem bateria", "sem carregador", "sem caixa", "apenas consola"]
+SUSPECT = ["untested", "test not done", "unable to test", "not tested", "unknown condition", "read description", "see description", "as is", "as-is", "no returns", "fair condition",]
+POSITIVE = ["complete", "fully working", "full set", "all accessories", "includes charger", "includes box", "includes accessories", "original box included", "perfect working"]
 
-def item_passa_filtro(titulo_ebay, utilizador_tem_item_partido):
+# Novas Listas para separar Novos de Usados
+NEW_KEYWORDS = ["sealed", "bnib", "nib", "unopened", "brand new", "factory sealed", "new in box","selado", "novo", "na caixa", "fechado", "por abrir"]
+USED_KEYWORDS = ["used", "pre-owned", "preowned", "open box", "loose", "built", "played", "good condition", "excellent condition","usado", "segunda mão", "estimado", "montado"]
+
+def item_passa_filtro(titulo_ebay, condicao_item):
     """
-    Decide se o anúncio do eBay entra na média.
-    utilizador_tem_item_partido = True (O utilizador ativou o modo Incompleto/Partido)
+    Decide se o anúncio do eBay entra na média baseado na condição exata.
+    condicao_item pode ser: "Brand New", "Used", "Parts"
     """
     titulo = titulo_ebay.lower()
     
-    # CENÁRIO 1: O utilizador tem um item PARTIDO/INCOMPLETO
-    if utilizador_tem_item_partido:
-        # Rejeitamos produtos que digam explicitamente que estão completos
-        if any(word in titulo for word in POSITIVE):
-            return False
-        # Para itens partidos, ser tolerante e aceitar o resto (ou focar nos partidos)
-        return True
-
-    # CENÁRIO 2: O utilizador tem um item BOM/COMPLETO (O padrão)
-    else:
-        # Rejeitamos lixo, coisas partidas e incompletas
-        if any(word in titulo for word in HARD_REJECT) or any(word in titulo for word in LIKELY_INCOMPLETE):
+    if condicao_item == "Parts":
+        # Se o meu é para peças, não quero comparar com novos nem completos
+        if any(word in titulo for word in POSITIVE + NEW_KEYWORDS):
             return False
         return True
 
+    elif condicao_item == "Brand New":
+        # Se o meu é NOVO SELADO, rejeito tudo o que indique uso ou falhas
+        if any(word in titulo for word in HARD_REJECT + LIKELY_INCOMPLETE + SUSPECT + USED_KEYWORDS):
+            return False
+        return True
+
+    else: # "Used" (Usado mas completo)
+        # Se o meu é USADO COMPLETO, rejeito o lixo, MAS TAMBÉM rejeito os novos selados que inflam o preço
+        if any(word in titulo for word in HARD_REJECT + LIKELY_INCOMPLETE):
+            return False
+        if any(word in titulo for word in NEW_KEYWORDS):
+            return False
+        return True
 
 
-def analisar_imagem_json(image, custo, objetivo, sabe_custo, item_partido):
+def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
     try:
         prompt_id = """
         Act as an expert inventory scanner. Analyze the image and extract:
@@ -537,7 +545,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, item_partido):
             try:
                 # 1. Puxar o título e passar no nosso filtro
                 titulo_anuncio = item.get('title', '')
-                if not item_passa_filtro(titulo_anuncio, item_partido):
+                if not item_passa_filtro(titulo_anuncio, condicao):
                     continue # Se chumbar no filtro, ignora este anúncio e passa ao próximo!
 
                 # 2. Se passar o filtro, captura o valor
@@ -820,10 +828,16 @@ with aba1:
         
         # --- NOVA CHECKBOX DE CUSTO ---
         # --- NOVA CHECKBOX DE CUSTO E CONDIÇÃO ---
+        # --- NOVA ZONA DE CUSTO E CONDIÇÃO ---
         sabe_custo_single = not st.checkbox("I don't know the item cost", key="check_custo_single")
         custo_single = st.number_input(f"Cost ({currency})", min_value=0.0, step=1.0, key="single_cost_final", disabled=not sabe_custo_single)
         
-        item_partido_single = st.checkbox("⚠️ Item is incomplete / for parts", key="check_broken_single")
+        condicao_single = st.selectbox("Item Condition", ["Used (Complete/Working)", "Brand New (Sealed)", "Incomplete / For Parts"], key="cond_single")
+        
+        # Traduzir a escolha para a palavra-chave do motor
+        if condicao_single == "Brand New (Sealed)": cond_codigo_single = "Brand New"
+        elif condicao_single == "Incomplete / For Parts": cond_codigo_single = "Parts"
+        else: cond_codigo_single = "Used"
 
         # --- BOTÃO DE ANÁLISE COM TRAVAS DE SEGURANÇA ---
         if st.button("🚀 Analyse Item", type="primary"):
@@ -847,7 +861,7 @@ with aba1:
                         # Registar no contador global para monitorizar tráfego mesmo em simulação
                         supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                         
-                        dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single, item_partido_single)
+                        dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single, cond_codigo_single)
                         dados['id_unico'] = time.time()
                         st.session_state.single_result = dados
 
@@ -859,7 +873,7 @@ with aba1:
                             supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                             
     
-                            dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single, item_partido_single)
+                            dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single, cond_codigo_single)
                             
                             if dados:
                                 # --- GUARDAR AUTOMATICAMENTE NO SUPABASE ---
@@ -966,11 +980,11 @@ with aba2:
         if "tabela_editavel" not in st.session_state or len(st.session_state.tabela_editavel) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
-                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Perfect", "Action": "Sell"})
+                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Used", "Action": "Sell"})
             st.session_state.tabela_editavel = pd.DataFrame(dados_iniciais)
         
         col_config = {
-            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Perfect", "Incomplete/Parts"])
+            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"])
         }
         if "Mixed" in modo_geral:
             col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
@@ -1008,7 +1022,12 @@ with aba2:
                     nome_fich = row["File"]
                     custo = row[f"Cost ({currency})"]
                     sabe_custo_bulk = not row.get("Unknown Cost", False)
-                    estado_bulk = True if row.get("Condition") == "Incomplete/Parts" else False
+                    
+                    # Converter a escolha da tabela para a variável do motor
+                    escolha_tabela = row.get("Condition", "Used")
+                    if escolha_tabela == "Brand New": cond_codigo_bulk = "Brand New"
+                    elif escolha_tabela == "Parts": cond_codigo_bulk = "Parts"
+                    else: cond_codigo_bulk = "Used"
                 
                     
                     if "Buying" in modo_geral: objetivo_final = "Comprar"
@@ -1036,7 +1055,7 @@ with aba2:
                             if not modo_simulacao:
                                 supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                             
-                            dados = analisar_imagem_json(img, custo, objetivo_final, sabe_custo_bulk, estado_bulk)
+                            dados = analisar_imagem_json(img, custo, objetivo_final, sabe_custo_bulk, cond_codigo_bulk)
                             
                             # Detetar erro de Limite (429)
                             if "429" in str(dados) or "Resource exhausted" in str(dados):
