@@ -966,11 +966,11 @@ with aba2:
         if "tabela_editavel" not in st.session_state or len(st.session_state.tabela_editavel) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
-                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Working", "Action": "Sell"})
+                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Perfect", "Action": "Sell"})
             st.session_state.tabela_editavel = pd.DataFrame(dados_iniciais)
         
         col_config = {
-            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Working", "Incomplete/Parts"])
+            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Perfect", "Incomplete/Parts"])
         }
         if "Mixed" in modo_geral:
             col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
