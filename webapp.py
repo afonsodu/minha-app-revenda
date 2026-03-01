@@ -465,7 +465,37 @@ def calculate_ebay_fees(region, seller_type, vat_registered, category, sale_pric
     return fees
 
 
-def analisar_imagem_json(image, custo, objetivo, sabe_custo):
+# --- SISTEMA DE FILTRO DE CONDIÇÃO ---
+HARD_REJECT = ["for parts", "for part", "not working", "broken", "faulty", "defective", "spares or repair", "spares and repair", "parts only", "repair only", "non functional", "does not work", "don't work", "damaged", "cracked"]
+LIKELY_INCOMPLETE = ["missing", "no battery", "no charger", "no box", "no cable", "no cables", "no controller", "no remote", "no power supply", "no psu", "no accessories", "without charger", "without battery", "without box", "without accessories", "unit only", "console only", "tablet only", "device only", "base unit only", "main unit only"]
+SUSPECT = ["untested", "test not done", "unable to test", "not tested", "unknown condition", "read description", "see description", "as is", "as-is", "no returns", "open box", "used condition", "fair condition"]
+POSITIVE = ["complete", "fully working", "full set", "all accessories", "includes charger", "includes box", "includes accessories", "original box included", "excellent condition", "perfect working"]
+
+def item_passa_filtro(titulo_ebay, utilizador_tem_item_partido):
+    """
+    Decide se o anúncio do eBay entra na média.
+    utilizador_tem_item_partido = True (O utilizador ativou o modo Incompleto/Partido)
+    """
+    titulo = titulo_ebay.lower()
+    
+    # CENÁRIO 1: O utilizador tem um item PARTIDO/INCOMPLETO
+    if utilizador_tem_item_partido:
+        # Rejeitamos produtos que digam explicitamente que estão completos
+        if any(word in titulo for word in POSITIVE):
+            return False
+        # Para itens partidos, ser tolerante e aceitar o resto (ou focar nos partidos)
+        return True
+
+    # CENÁRIO 2: O utilizador tem um item BOM/COMPLETO (O padrão)
+    else:
+        # Rejeitamos lixo, coisas partidas e incompletas
+        if any(word in titulo for word in HARD_REJECT) or any(word in titulo for word in LIKELY_INCOMPLETE):
+            return False
+        return True
+
+
+
+def analisar_imagem_json(image, custo, objetivo, sabe_custo, item_partido):
     try:
         prompt_id = """
         Act as an expert inventory scanner. Analyze the image and extract:
@@ -505,6 +535,12 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo):
         
         for item in item_summaries:
             try:
+                # 1. Puxar o título e passar no nosso filtro
+                titulo_anuncio = item.get('title', '')
+                if not item_passa_filtro(titulo_anuncio, item_partido):
+                    continue # Se chumbar no filtro, ignora este anúncio e passa ao próximo!
+
+                # 2. Se passar o filtro, captura o valor
                 valor = float(item.get('price', {}).get('value', 0))
                 if valor > 3.0:
                     precos.append(valor)
@@ -783,8 +819,11 @@ with aba1:
         foto_single = st.file_uploader("Upload Photo", type=["jpg", "png"], key="single_up_final")
         
         # --- NOVA CHECKBOX DE CUSTO ---
+        # --- NOVA CHECKBOX DE CUSTO E CONDIÇÃO ---
         sabe_custo_single = not st.checkbox("I don't know the item cost", key="check_custo_single")
         custo_single = st.number_input(f"Cost ({currency})", min_value=0.0, step=1.0, key="single_cost_final", disabled=not sabe_custo_single)
+        
+        item_partido_single = st.checkbox("⚠️ Item is incomplete / for parts", key="check_broken_single")
 
         # --- BOTÃO DE ANÁLISE COM TRAVAS DE SEGURANÇA ---
         if st.button("🚀 Analyse Item", type="primary"):
@@ -808,7 +847,7 @@ with aba1:
                         # Registar no contador global para monitorizar tráfego mesmo em simulação
                         supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                         
-                        dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single)
+                        dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single, item_partido_single)
                         dados['id_unico'] = time.time()
                         st.session_state.single_result = dados
 
@@ -820,7 +859,7 @@ with aba1:
                             supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                             
     
-                            dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single)
+                            dados = analisar_imagem_json(img, custo_single, objetivo_single, sabe_custo_single, item_partido_single)
                             
                             if dados:
                                 # --- GUARDAR AUTOMATICAMENTE NO SUPABASE ---
@@ -927,15 +966,17 @@ with aba2:
         if "tabela_editavel" not in st.session_state or len(st.session_state.tabela_editavel) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
-                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Action": "Sell"})
+                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Working", "Action": "Sell"})
             st.session_state.tabela_editavel = pd.DataFrame(dados_iniciais)
         
-        col_config = {}
+        col_config = {
+            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Working", "Incomplete/Parts"])
+        }
         if "Mixed" in modo_geral:
             col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
-            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost", "Action"]
+            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost", "Condition", "Action"]
         else:
-            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost"]
+            colunas_visiveis = ["File", f"Cost ({currency})", "Unknown Cost", "Condition"]
         
         tabela_editada = st.data_editor(st.session_state.tabela_editavel[colunas_visiveis], num_rows="dynamic", use_container_width=True, key="editor_bulk", column_config=col_config)
         
@@ -967,6 +1008,8 @@ with aba2:
                     nome_fich = row["File"]
                     custo = row[f"Cost ({currency})"]
                     sabe_custo_bulk = not row.get("Unknown Cost", False)
+                    estado_bulk = True if row.get("Condition") == "Incomplete/Parts" else False
+                
                     
                     if "Buying" in modo_geral: objetivo_final = "Comprar"
                     elif "Selling" in modo_geral: objetivo_final = "Vender"
@@ -993,7 +1036,7 @@ with aba2:
                             if not modo_simulacao:
                                 supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
                             
-                            dados = analisar_imagem_json(img, custo, objetivo_final, sabe_custo_bulk)
+                            dados = analisar_imagem_json(img, custo, objetivo_final, sabe_custo_bulk, estado_bulk)
                             
                             # Detetar erro de Limite (429)
                             if "429" in str(dados) or "Resource exhausted" in str(dados):
