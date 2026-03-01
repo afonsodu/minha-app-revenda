@@ -494,28 +494,23 @@ def contains_word(text, word):
 
 def item_passa_filtro(titulo_ebay, condicao_item, nome_pesquisado=""):
     titulo = titulo_ebay.lower()
-    pesquisa = nome_pesquisado.lower()
     
-    # 🛡️ BARREIRA ANTI-INFLAÇÃO (Consolas, Lotes, etc)
-    for word in AVOID_INFLATION:
-        if word in titulo and word not in pesquisa:
-            return False
-
+    # Se é para peças, não queremos coisas a dizer que funcionam perfeitamente
     if condicao_item == "Parts":
         if any(contains_word(titulo, word) for word in POSITIVE + NEW_KEYWORDS): return False
         return True
 
+    # Se é Novo, apenas bloqueamos se o título confessar que é usado, partido ou suspeito
     elif condicao_item == "Brand New":
         NOT_NEW = ["used", "pre-owned", "preowned", "open box", "loose", "built", "played", "no box", "without box", "usado", "montado", "sem caixa"]
         if any(contains_word(titulo, word) for word in HARD_REJECT + LIKELY_INCOMPLETE + SUSPECT + NOT_NEW): return False
-        if not any(contains_word(titulo, word) for word in NEW_KEYWORDS): return False
         return True
 
+    # Se é Usado, bloqueamos o lixo avariado, mas deixamos os títulos normais passarem
     else: # "Used"
         if any(contains_word(titulo, word) for word in HARD_REJECT + LIKELY_INCOMPLETE): return False
-        if any(contains_word(titulo, word) for word in NEW_KEYWORDS): return False
+        # Retiramos a proibição de palavras "NEW" aqui, porque muitos vendedores escrevem "Like New" (Como Novo) nos usados.
         return True
-    
 
 def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
     try:
@@ -575,6 +570,9 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                     except:
                         custo_envio = 4.50
 
+                    if custo_envio > 30.0:
+                        continue
+
             
                     dados_validados.append({"preco": valor, "envio": custo_envio})
             except:
@@ -601,7 +599,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                 lista_atualizada = [d["preco"] for d in dados_validados]
                 media_bruta = np.mean(lista_atualizada)
                 desvio = np.std(lista_atualizada)
-                
+
                 # 1.5 é o padrão de ouro estatístico. Retém dados normais e apaga só os absurdos.
                 dados_seguros = [d for d in dados_validados if abs(d["preco"] - media_bruta) <= (desvio * 1.5)]
                 if dados_seguros:
