@@ -14,7 +14,7 @@ from ebay_engine import get_ebay_token, buscar_precos_ebay
 import os
 from google.oauth2 import service_account
 import numpy as np
-
+import re
 
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 
@@ -485,33 +485,28 @@ POSITIVE = ["complete", "fully working", "full set", "all accessories", "include
 NEW_KEYWORDS = ["sealed", "bnib", "nib", "unopened", "brand new", "factory sealed", "new in box","selado", "novo", "na caixa", "fechado", "por abrir"]
 USED_KEYWORDS = ["used", "pre-owned", "preowned", "open box", "loose", "built", "played", "good condition", "excellent condition","usado", "segunda mão", "estimado", "montado"]
 
+
+def contains_word(text, word):
+    """Garante que a palavra é exata (não confunde 'unused' com 'used')"""
+    return re.search(r'\b' + re.escape(word) + r'\b', text) is not None
+
 def item_passa_filtro(titulo_ebay, condicao_item):
-    """
-    Decide se o anúncio do eBay entra na média baseado na condição exata.
-    condicao_item pode ser: "Brand New", "Used", "Parts"
-    """
     titulo = titulo_ebay.lower()
     
     if condicao_item == "Parts":
-        # Se o meu é para peças, não quero comparar com novos nem completos
-        if any(word in titulo for word in POSITIVE + NEW_KEYWORDS):
-            return False
+        if any(contains_word(titulo, word) for word in POSITIVE + NEW_KEYWORDS): return False
         return True
 
     elif condicao_item == "Brand New":
-        # Se o meu é NOVO SELADO, rejeito tudo o que indique uso ou falhas
-        if any(word in titulo for word in HARD_REJECT + LIKELY_INCOMPLETE + SUSPECT + USED_KEYWORDS):
-            return False
+        NOT_NEW = ["used", "pre-owned", "preowned", "open box", "loose", "built", "played", "no box", "without box", "usado", "montado", "sem caixa"]
+        if any(contains_word(titulo, word) for word in HARD_REJECT + LIKELY_INCOMPLETE + SUSPECT + NOT_NEW): return False
+        if not any(contains_word(titulo, word) for word in NEW_KEYWORDS): return False
         return True
 
-    else: # "Used" (Usado mas completo)
-        # Se o meu é USADO COMPLETO, rejeito o lixo, MAS TAMBÉM rejeito os novos selados que inflam o preço
-        if any(word in titulo for word in HARD_REJECT + LIKELY_INCOMPLETE):
-            return False
-        if any(word in titulo for word in NEW_KEYWORDS):
-            return False
+    else: # "Used"
+        if any(contains_word(titulo, word) for word in HARD_REJECT + LIKELY_INCOMPLETE): return False
+        if any(contains_word(titulo, word) for word in NEW_KEYWORDS): return False
         return True
-
 
 def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
     try:
@@ -548,99 +543,103 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         dados_ebay = buscar_precos_ebay(token, nome_item, marketplace_id=marketplace_atual)
         
         item_summaries = dados_ebay.get('itemSummaries', [])
-        precos = []
-        envios = [] # <--- NOVA LISTA PARA PORTES
+        item_summaries = dados_ebay.get('itemSummaries', [])
+        
+        # Guardamos pacotes juntos: {"preco": 100, "envio": 5}
+        dados_validados = [] 
         
         for item in item_summaries:
             try:
-                # 1. Puxar o título e passar no nosso filtro
                 titulo_anuncio = item.get('title', '')
-                if not item_passa_filtro(titulo_anuncio, condicao):
-                    continue # Se chumbar no filtro, ignora este anúncio e passa ao próximo!
+                condition_id = item.get('conditionId', '')
+                
+                # Nível Enterprise: Rejeitar lixo logo pelo ID do eBay (7000 = Para Peças)
+                if condicao != "Parts" and condition_id == "7000":
+                    continue
 
-                # 2. Se passar o filtro, captura o valor
+                if not item_passa_filtro(titulo_anuncio, condicao):
+                    continue
+
                 valor = float(item.get('price', {}).get('value', 0))
                 if valor > 3.0:
-                    precos.append(valor)
-                    # --- APANHAR OS PORTES REAIS DA API ---
                     try:
                         opcoes_envio = item.get('shippingOptions', [])
-                        if opcoes_envio:
-                            custo_envio = float(opcoes_envio[0].get('shippingCost', {}).get('value', 0))
-                            envios.append(custo_envio)
-                        else:
-                            envios.append(0) # Portes grátis
+                        custo_envio = float(opcoes_envio[0].get('shippingCost', {}).get('value', 0)) if opcoes_envio else 0.0
                     except:
-                        envios.append(4.50) # Valor de segurança médio
+                        custo_envio = 4.50
+
+                    dados_validados.append({"preco": valor, "envio": custo_envio})
             except:
                 continue
 
-      
-        # --- PASSO 3: MOTOR DE PUREZA DE DADOS (AVERAGE PRICE) ---
-        if precos:
-            # 1. Achar o verdadeiro "Centro" da multidão (A Mediana é imune a preços estúpidos)
-            mediana_real = np.median(precos)
+        # --- PASSO 3: MOTOR DE PUREZA ENTERPRISE ---
+        # --- PASSO 3: MOTOR DE PUREZA ENTERPRISE ---
+        if dados_validados:
+            # Extrair apenas os preços para a matemática
+            lista_precos = [d["preco"] for d in dados_validados]
+            mediana_real = np.median(lista_precos)
             
-            # 2. FILTRO DE CHÃO (Mata as bolsas de 11€ e os cabos de 5€)
+            # 1. Filtro de Chão e Teto
             if condicao == "Brand New":
-                # Um item novo nunca custa menos de 45% do valor normal do mercado
-                precos = [p for p in precos if p >= (mediana_real * 0.45)]
+                dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.45)]
             else:
-                # Um usado não custa menos de 20% (protege contra "só a caixa")
-                precos = [p for p in precos if p >= (mediana_real * 0.20)]
-                
-            # 3. FILTRO DE TETO (Mata os Bundles, Scalpers e Edições "Edge/Modded")
-            # Ignora coisas que custam quase o dobro do normal
-            precos = [p for p in precos if p <= (mediana_real * 1.8)]
+                dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.20)]
             
-            # 4. GUILHOTINA FINAL (Desvio Padrão para apertar a precisão)
-            if len(precos) > 2:
-                media_bruta = np.mean(precos)
-                desvio = np.std(precos)
-                # Usamos 1.25 desvios para não ser tão apertado ao ponto de dar zero, mas justo o suficiente
-                precos_seguros = [p for p in precos if abs(p - media_bruta) <= (desvio * 1.25)]
-                if precos_seguros: # Garante que não apaga tudo se houver muita variação
-                    precos = precos_seguros
+            dados_validados = [d for d in dados_validados if d["preco"] <= (mediana_real * 1.8)]
+            
+            # 2. A Guilhotina de Desvio Padrão
+            if len(dados_validados) >= 4:
+                lista_atualizada = [d["preco"] for d in dados_validados]
+                media_bruta = np.mean(lista_atualizada)
+                desvio = np.std(lista_atualizada)
+                
+                dados_seguros = [d for d in dados_validados if abs(d["preco"] - media_bruta) <= (desvio * 1.5)]
+                if dados_seguros:
+                    dados_validados = dados_seguros
 
-            # 5. CÁLCULO DA MÉDIA PURA
-            if precos:
-                p_medio = sum(precos) / len(precos)
+            # 3. Cálculo Final Seguro
+            if dados_validados:
+                p_medio = sum(d["preco"] for d in dados_validados) / len(dados_validados)
+                portes_medios = sum(d["envio"] for d in dados_validados) / len(dados_validados)
                 p_venda = p_medio * 0.9 
             else:
-                p_medio = p_venda = 0.0
-            
-            # --- CÁLCULO DA IA PARA TAXAS ---
-            portes_medios = sum(envios) / len(envios) if envios else 4.50
-            # A magia acontece aqui: a comissão adapta-se à categoria e ao preço!
+                p_medio = p_venda = portes_medios = 0.0
+        else:
+            p_medio = p_venda = portes_medios = 0.0
+
+        # --- PASSO 4: CÁLCULO DE TAXAS E ESTRATÉGIA ---
+        # Se encontrou preços válidos no eBay, faz a matemática:
+        if p_medio > 0:
             comissao_plataforma = calculate_ebay_fees(region, seller_type, vat_registered, categoria_item, p_venda) 
             taxas_estimadas = portes_medios + comissao_plataforma
             
             custo_real = 0 if not sabe_custo else custo
             lucro = p_venda - custo_real - taxas_estimadas
             
-            link_mercado = f"https://www.ebay.com/sch/i.html?_nkw=\"{nome_item.replace(' ', '+')}\"&LH_Sold=1"
-          
+            # Garantir o domínio certo para o link do botão
+            dominio = "ebay.co.uk" if region == "🇬🇧 UK (£)" else "ebay.es" if region == "🇵🇹 Portugal (€)" else "ebay.com"
+            link_mercado = f"https://www.{dominio}/sch/i.html?_nkw=\"{nome_item.replace(' ', '+')}\"&LH_Sold=1"
+            
             cor = "🟢" if lucro > 10 else "🟡"
             if lucro < 0: cor = "🔴"
             
-            # Gerador de Estratégia
             if not sabe_custo:
-                estrategia = f"Active market ({len(precos)} sales). Since you don't know the cost, any purchase you make must leave a margin given the {currency}{round(lucro, 2)} net profit remaining after fees."
+                estrategia = f"Active market ({len(dados_validados)} sales). Since you don't know the cost, any purchase you make must leave a margin given the {currency}{round(lucro, 2)} net profit remaining after fees."
             else:
                 if lucro < 0:
                     estrategia = "❌ Loss ahead! The cost and fees devour the sale value. You should try to find it much cheaper."
                 elif lucro < 5:
                     estrategia = "⚠️ Very tight margin. Only worth it if the sale is extremely fast."
-                elif lucro >= 15 and len(precos) > 5:
+                elif lucro >= 15 and len(dados_validados) > 5:
                     estrategia = "🔥 Excellent deal! You'll make substantial profit and the market is eager for this item."
                 else:
                     estrategia = "👍 Solid business. Acceptable margin and stable market for selling."
             
             if p_venda > 200:
                 estrategia += " ⚠️ HIGH VALUE: This item appears to be high-end. Always check the eBay link to confirm special editions before investing."
-            
+                
+        # Se NÃO encontrou preços, ativa o Plano B (A IA tenta adivinhar o preço pela imagem)
         else:
-            # --- FALLBACK: A IA VIRA AVALIADORA QUANDO O EBAY FALHA ---
             prompt_estimativa = f"""
             I couldn't find recent sales references on eBay for "{nome_item}". 
             Act as a specialist appraiser of resale items. Look carefully at the image, evaluate the product type, brand, materials and apparent condition.
@@ -650,42 +649,37 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             """
             
             try:    
-                # Chamamos a IA de novo para olhar para a foto com o novo objetivo
                 res_estimativa = client.models.generate_content(
                     model='gemini-2.0-flash', 
                     contents=[prompt_estimativa, image]
                 )
-                
-                # Limpar a resposta para garantir que o Python consegue ler o JSON
                 texto_json = res_estimativa.text.replace("```json", "").replace("```", "").strip()
                 dados_ia = json.loads(texto_json)
                 
-                # Extrair os valores que a IA imaginou
                 p_venda = float(dados_ia.get("preco", 0))
                 justificativa = dados_ia.get("justificativa", "Evaluation based on general appearance.")
                 
-                # Fazer a matemática das taxas com a estimativa da IA
                 p_medio = p_venda 
-                portes_medios = 4.50 # Como não há anúncios reais, usamos o porte médio padrão
+                portes_medios = 4.50 
                 comissao_plataforma = p_venda * 0.13
                 taxas_estimadas = portes_medios + comissao_plataforma
                 
                 custo_real = 0 if not sabe_custo else custo
                 lucro = p_venda - custo_real - taxas_estimadas
                 
-                link_mercado = f"https://www.ebay.com/sch/i.html?_nkw={nome_item.replace(' ', '+')}"
+                dominio = "ebay.co.uk" if region == "🇬🇧 UK (£)" else "ebay.es" if region == "🇵🇹 Portugal (€)" else "ebay.com"
+                link_mercado = f"https://www.{dominio}/sch/i.html?_nkw={nome_item.replace(' ', '+')}"
                 
-                # Definimos o veredito com a nova estratégia
-                cor = "🔮" # Emoji de bola de cristal para saberes que foi uma estimativa da IA e não do mercado
+                cor = "🔮" 
                 if lucro < 0: cor = "🔴"
                 elif lucro > 10: cor = "🟢"
                 
                 estrategia = f"I did not find any recent sales data for this item on eBay. My AI estimated the value based on visual inspection: {justificativa}"
                 
             except Exception as e:
-                # Se a IA se engasgar a tentar adivinhar, não crashamos, devolvemos 0
                 p_medio = p_venda = lucro = taxas_estimadas = 0
-                link_mercado = f"https://www.ebay.com/sch/i.html?_nkw={nome_item.replace(' ', '+')}"
+                dominio = "ebay.co.uk" if region == "🇬🇧 UK (£)" else "ebay.es" if region == "🇵🇹 Portugal (€)" else "ebay.com"
+                link_mercado = f"https://www.{dominio}/sch/i.html?_nkw={nome_item.replace(' ', '+')}"
                 cor = "⚪"
                 estrategia = "I did not find any recent sales data for this item on eBay and the AI could not estimate the value."
 
@@ -706,6 +700,8 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             "estrategia_base": f"Technical Error: {str(e)}",
             "veredito_cor": "🔴"
         }
+    
+
 def criar_chat_session(dados_completos):
     """Cria uma sessão de chat especialista no contexto do produto analisado."""
     if modo_simulacao:
