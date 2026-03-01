@@ -1016,32 +1016,31 @@ with aba2:
     fotos_bulk = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="bulk_up")
     
     if fotos_bulk:
-            # 1. Criar o "Cofre" se for a primeira vez ou se adicionares/removeres fotos
-        if "tabela_editavel" not in st.session_state or len(st.session_state.tabela_editavel) != len(fotos_bulk):
+        # 1. Criar o "Cofre" BASE (Nunca sobrecrevemos isto com o editor!)
+        if "tabela_base" not in st.session_state or len(st.session_state.tabela_base) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
                 dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Used", "Action": "Sell"})
-            st.session_state.tabela_editavel = pd.DataFrame(dados_iniciais)
+            st.session_state.tabela_base = pd.DataFrame(dados_iniciais)
             
-            # 2. Configurar as colunas (Dropdowns)
+        # 2. Configurar as colunas (Dropdowns)
         col_config = {
-                "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"])
-            }
-            
-            # 3. O SEGREDO: Em vez de cortarmos o DataFrame, escondemos a coluna visualmente!
+            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"])
+        }
+        
         if "Mixed" in modo_geral:
-                col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
+            col_config["Action"] = st.column_config.SelectboxColumn("Action", width="medium", options=["Sell", "Buy"], required=True)
         else:
-                col_config["Action"] = None  # Isto diz ao Streamlit "oculta isto", mas não cria cópias na memória!
+            col_config["Action"] = None
             
-            # 4. Gravar as edições DIRETAMENTE no cofre, passando a tabela inteira
-        st.session_state.tabela_editavel = st.data_editor(
-                st.session_state.tabela_editavel, 
-                num_rows="dynamic", 
-                use_container_width=True, 
-                key="editor_bulk", 
-                column_config=col_config
-            )
+        # 3. O SEGREDO: A tabela editada é uma nova variável e lê da base, mas NÃO sobrecreve a base!
+        tabela_editada = st.data_editor(
+            st.session_state.tabela_base, 
+            num_rows="dynamic", 
+            use_container_width=True, 
+            key="editor_bulk_limpo", 
+            column_config=col_config
+        )
 
         if st.button("🚀 Process Bulk"):
             if not st.session_state.get('email_logado'):
@@ -1050,9 +1049,12 @@ with aba2:
                 st.session_state.bulk_results = []
                 st.session_state.bulk_images = {}
                 barra = st.progress(0)
-                total_items = len(st.session_state.tabela_editavel)
                 
-                for i, row in st.session_state.tabela_editavel.iterrows():
+                # 4. Usamos a tabela_editada para o Loop!
+                total_items = len(tabela_editada)
+                
+                for i, row in tabela_editada.iterrows():
+                    # --- 🛡️ 1. TRAVAS DE SEGURANÇA ---
                     # --- 🛡️ 1. TRAVAS DE SEGURANÇA ---
                     if trava_seguranca_global():
                         st.error(f"🛑 Global limit reached. Stopped at item {i+1}.")
