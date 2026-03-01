@@ -518,7 +518,8 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         Act as an expert inventory scanner. Analyze the image and extract:
         1. OCR: All text on the packaging (Brand, Model, Shades, Editions).
         2. BARCODE: If visible, extract the numbers.
-        3. If no barcode, identify the exact model by design.
+        3. CAPACITY/SIZE: If it's a liquid, perfume, or cosmetic, extract the volume (e.g., 50ml, 100ml, 3.4 oz). THIS IS CRUCIAL for pricing.
+        4. If no barcode, identify the exact model by design.
         
         Classify the item STRICTLY into one of these eBay categories: 
         "Sneakers", "Watches", "Electronics", "Guitars & Basses", "Books/Media", "Collectibles" or "Others".
