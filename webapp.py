@@ -13,6 +13,7 @@ from google.genai import types
 from ebay_engine import get_ebay_token, buscar_precos_ebay
 import os
 from google.oauth2 import service_account
+import numpy as np
 
 
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
@@ -565,13 +566,31 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             except:
                 continue
 
-        # --- PASSO 3: LÓGICA DE NEGÓCIO COM TAXAS AUTOMÁTICAS ---
+      
+        # --- PASSO 3: LÓGICA DE NEGÓCIO COM TAXAS AUTOMÁTICAS (FILTRO PREDOMINANTE) ---
         if precos:
-            precos.sort()
-            if len(precos) > 4:
-                precos = precos[1:-1]
+            # 1. FILTRO DE SOBREVIVÊNCIA "BRAND NEW" (Anti-Peças)
+            if condicao == "Brand New" and len(precos) > 0:
+                # Um item novo selado nunca custa menos de 30% do valor do item mais caro encontrado
+                # Isto elimina bolsas de 11€ imediatamente se o topo for 150€
+                preco_max = max(precos)
+                precos = [p for p in precos if p >= (preco_max * 0.30)]
+
+            # 2. O FILTRO PREDOMINANTE: DESVIO PADRÃO (Agressivo)
+            if len(precos) > 2:
+                media_bruta = np.mean(precos)
+                desvio_padrao = np.std(precos)
+                
+                # A Guilhotina: Só aceita preços que estejam muito próximos da média (Distância <= 1 Desvio Padrão)
+                # Prefere apagar bons dados do que aceitar lixo!
+                precos_filtrados = [p for p in precos if abs(p - media_bruta) <= desvio_padrao]
+                
+                # Se sobrar algum dado após esta limpeza extrema, usamos a lista limpa
+                if len(precos_filtrados) > 0:
+                    precos = precos_filtrados
             
-            p_medio = sum(precos) / len(precos)
+            # 3. Média Final Purificada
+            p_medio = sum(precos) / len(precos) if precos else 0.0
             p_venda = p_medio * 0.9
             
             # --- CÁLCULO DA IA PARA TAXAS ---
