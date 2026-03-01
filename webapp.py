@@ -28,6 +28,15 @@ region = st.sidebar.selectbox(
     ["🇺🇸 USA ($)", "🇬🇧 UK (£)", "🇵🇹 Portugal (€)"]
 )
 
+# --- DEFINIR O MERCADO DO EBAY GLOBALMENTE ---
+mapa_marketplaces = {
+    "🇺🇸 USA ($)": "EBAY_US",
+    "🇬🇧 UK (£)": "EBAY_GB",
+    "🇵🇹 Portugal (€)": "EBAY_ES" 
+}
+marketplace_atual = mapa_marketplaces.get(region, "EBAY_US")
+
+# Definir variáveis padrão (para não dar erro noutras regiões)
 # Definir variáveis padrão (para não dar erro noutras regiões)
 seller_type = "Business" 
 vat_registered = "Yes"
