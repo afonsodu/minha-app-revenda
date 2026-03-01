@@ -485,14 +485,22 @@ POSITIVE = ["complete", "fully working", "full set", "all accessories", "include
 NEW_KEYWORDS = ["sealed", "bnib", "nib", "unopened", "brand new", "factory sealed", "new in box","selado", "novo", "na caixa", "fechado", "por abrir"]
 USED_KEYWORDS = ["used", "pre-owned", "preowned", "open box", "loose", "built", "played", "good condition", "excellent condition","usado", "segunda mão", "estimado", "montado"]
 
+# Adiciona as palavras que inflam preços
+AVOID_INFLATION = ["console", "consola", "bundle", "lot ", "lote", "joblot", "set of", "graded", "wata", "vga", "ukg", "pcgs"]
 
 def contains_word(text, word):
     """Garante que a palavra é exata (não confunde 'unused' com 'used')"""
     return re.search(r'\b' + re.escape(word) + r'\b', text) is not None
 
-def item_passa_filtro(titulo_ebay, condicao_item):
+def item_passa_filtro(titulo_ebay, condicao_item, nome_pesquisado=""):
     titulo = titulo_ebay.lower()
+    pesquisa = nome_pesquisado.lower()
     
+    # 🛡️ BARREIRA ANTI-INFLAÇÃO (Consolas, Lotes, etc)
+    for word in AVOID_INFLATION:
+        if word in titulo and word not in pesquisa:
+            return False
+
     if condicao_item == "Parts":
         if any(contains_word(titulo, word) for word in POSITIVE + NEW_KEYWORDS): return False
         return True
@@ -507,6 +515,7 @@ def item_passa_filtro(titulo_ebay, condicao_item):
         if any(contains_word(titulo, word) for word in HARD_REJECT + LIKELY_INCOMPLETE): return False
         if any(contains_word(titulo, word) for word in NEW_KEYWORDS): return False
         return True
+    
 
 def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
     try:
@@ -543,9 +552,6 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         dados_ebay = buscar_precos_ebay(token, nome_item, marketplace_id=marketplace_atual)
         
         item_summaries = dados_ebay.get('itemSummaries', [])
-        item_summaries = dados_ebay.get('itemSummaries', [])
-        
-        # Guardamos pacotes juntos: {"preco": 100, "envio": 5}
         dados_validados = [] 
         
         for item in item_summaries:
@@ -553,11 +559,12 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                 titulo_anuncio = item.get('title', '')
                 condition_id = item.get('conditionId', '')
                 
-                # Nível Enterprise: Rejeitar lixo logo pelo ID do eBay (7000 = Para Peças)
+                # Rejeitar lixo logo pelo ID do eBay (7000 = Para Peças)
                 if condicao != "Parts" and condition_id == "7000":
                     continue
 
-                if not item_passa_filtro(titulo_anuncio, condicao):
+                # Passamos o nome_item para bloquear as palavras inflacionárias
+                if not item_passa_filtro(titulo_anuncio, condicao, nome_item):
                     continue
 
                 valor = float(item.get('price', {}).get('value', 0))
@@ -568,26 +575,28 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                     except:
                         custo_envio = 4.50
 
+                    # Bloqueia portes internacionais absurdos (>30) que destroem o lucro
+                    if custo_envio > 30.0:
+                        continue
+
                     dados_validados.append({"preco": valor, "envio": custo_envio})
             except:
                 continue
 
-        # --- PASSO 3: MOTOR DE PUREZA ENTERPRISE ---
-        # --- PASSO 3: MOTOR DE PUREZA ENTERPRISE ---
+        # --- PASSO 3: MOTOR DE PUREZA ESTATÍSTICA (AMOSTRA GRANDE) ---
         if dados_validados:
-            # Extrair apenas os preços para a matemática
             lista_precos = [d["preco"] for d in dados_validados]
             mediana_real = np.median(lista_precos)
             
-            # 1. Filtro de Chão e Teto
+            # Filtro de Chão e Teto (Teto agora é 1.6x a mediana)
             if condicao == "Brand New":
                 dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.45)]
             else:
                 dados_validados = [d for d in dados_validados if d["preco"] >= (mediana_real * 0.20)]
             
-            dados_validados = [d for d in dados_validados if d["preco"] <= (mediana_real * 1.8)]
+            dados_validados = [d for d in dados_validados if d["preco"] <= (mediana_real * 1.6)]
             
-            # 2. A Guilhotina de Desvio Padrão
+            # Guilhotina de Desvio Padrão
             if len(dados_validados) >= 4:
                 lista_atualizada = [d["preco"] for d in dados_validados]
                 media_bruta = np.mean(lista_atualizada)
@@ -597,8 +606,8 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
                 if dados_seguros:
                     dados_validados = dados_seguros
 
-            # 3. Cálculo Final Seguro
-            if dados_validados:
+            # Cálculo Final (Só avança se sobraram pelo menos 2 anúncios de confiança)
+            if len(dados_validados) >= 2:
                 p_medio = sum(d["preco"] for d in dados_validados) / len(dados_validados)
                 portes_medios = sum(d["envio"] for d in dados_validados) / len(dados_validados)
                 p_venda = p_medio * 0.9 

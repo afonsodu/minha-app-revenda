@@ -21,7 +21,7 @@ def get_ebay_token(app_id, cert_id):
 def buscar_precos_ebay(token, produto, marketplace_id="EBAY_US"):
     """Procura itens vendidos para calcular a média real"""
     # Removemos o filtro USED do eBay. O nosso código Python (Guilhotina) é que faz o filtro das condições agora!
-    url = f"https://api.ebay.com/buy/browse/v1/item_summary/search?q={produto}&limit=20"
+    url = f"https://api.ebay.com/buy/browse/v1/item_summary/search?q={produto}&limit=50"
     
     headers = {
         "Authorization": f"Bearer {token}",
