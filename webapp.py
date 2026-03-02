@@ -553,13 +553,27 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         for item in item_summaries:
             try:
                 titulo_anuncio = item.get('title', '')
-                condition_id = item.get('conditionId', '')
+                # Transformamos o ID em texto para ter a certeza que não falha
+                condition_id = str(item.get('conditionId', ''))
                 
-                # Rejeitar lixo logo pelo ID do eBay (7000 = Para Peças)
-                if condicao != "Parts" and condition_id == "7000":
-                    continue
+                # --- 🛡️ NOVO ESCUDO DE CONDIÇÃO OFICIAL DO EBAY ---
+                # O eBay não mente nestes códigos: 1000=Novo, 3000=Usado, 7000=Peças
+                if condicao == "Brand New":
+                    # Se escolheste "Brand New", APAGA tudo o que não seja oficialmente Novo (1000) ou Novo sem selo (1500)
+                    if condition_id not in ["1000", "1500", "1750", "2000"]:
+                        continue
+                        
+                elif condicao == "Parts":
+                    # Se escolheste Peças, APAGA tudo o que não seja 7000
+                    if condition_id != "7000":
+                        continue
+                        
+                else: # Condição "Used"
+                    # Se escolheste Usado, APAGA os estragados (7000) e os Novos (1000) para não inflacionar o teu preço de usado!
+                    if condition_id in ["7000", "1000", "1500", "1750"]:
+                        continue
 
-                # Passamos o nome_item para bloquear as palavras inflacionárias
+                # Passamos o nome_item para bloquear as palavras inflacionárias (bundles, consolas, etc)
                 if not item_passa_filtro(titulo_anuncio, condicao, nome_item):
                     continue
 
@@ -625,9 +639,26 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             custo_real = 0 if not sabe_custo else custo
             lucro = p_venda - custo_real - taxas_estimadas
             
-            # Garantir o domínio certo para o link do botão
-            dominio = "ebay.co.uk" if region == "🇬🇧 UK (£)" else "ebay.es" if region == "🇵🇹 Portugal (€)" else "ebay.com"
-            link_mercado = f"https://www.{dominio}/sch/i.html?_nkw=\"{nome_item.replace(' ', '+')}\"&LH_Sold=1"
+            # 1. Definir o domínio correto com base na Região
+            if region == "🇺🇸 USA ($)":
+                dominio = "ebay.com"
+            elif region == "🇬🇧 UK (£)":
+                dominio = "ebay.co.uk"
+            else:
+                dominio = "ebay.es" # Para Portugal/Europa
+
+            # 2. Mapear a CONDIÇÃO para o código de URL do eBay
+            # O código '3' no URL força o eBay a assinalar a caixa "New"
+            # O código '4' força a caixa "Used"
+            if condicao == "Brand New":
+                filtro_condicao = "&LH_ItemCondition=3"
+            elif condicao == "Parts":
+                filtro_condicao = "&LH_ItemCondition=7000"
+            else:
+                filtro_condicao = "&LH_ItemCondition=4"
+
+            # 3. Gerar o Link Final com Vendas Concluídas (LH_Sold=1) e a Condição
+            link_mercado = f"https://www.{dominio}/sch/i.html?_nkw={nome_item.replace(' ', '+')}&LH_Sold=1&LH_Complete=1{filtro_condicao}"
             
             cor = "🟢" if lucro > 10 else "🟡"
             if lucro < 0: cor = "🔴"
