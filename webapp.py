@@ -1052,12 +1052,13 @@ with aba2:
         if "tabela_base" not in st.session_state or len(st.session_state.tabela_base) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
-                dados_iniciais.append({"File": f.name, f"Cost ({currency})": 0.0, "Unknown Cost": False, "Condition": "Used", "Action": "Sell"})
+                dados_iniciais.append({"File": f.name, "Cost ": 0.0, "Unknown Cost": False, "Condition": "Used", "Action": "Sell"})
             st.session_state.tabela_base = pd.DataFrame(dados_iniciais)
             
         # 2. Configurar as colunas (Dropdowns)
         col_config = {
-            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"])
+            "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"]),
+            "Cost": st.column_config.NumberColumn(f"Cost ({currency})", min_value=0.0)
         }
         
         if "Mixed" in modo_geral:
@@ -1100,7 +1101,7 @@ with aba2:
 
                     # --- 2. DEFINIÇÃO DE DADOS DO ITEM ---
                     nome_fich = row["File"]
-                    custo = row[f"Cost ({currency})"]
+                    custo = row["Cost"]
                     sabe_custo_bulk = not row.get("Unknown Cost", False)
                     
                     # Converter a escolha da tabela para a variável do motor
