@@ -517,15 +517,15 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         prompt_id = """
         Act as an expert inventory scanner. Analyze the image and extract:
         1. OCR: All text on the packaging (Brand, Model, Shades, Editions).
-        2. BARCODE: If visible, extract the numbers.
+        2. BARCODE: If visible, use the numbers internally to identify the exact product.
         3. CAPACITY/SIZE: If it's a liquid, perfume, or cosmetic, extract the volume (e.g., 50ml, 100ml, 3.4 oz). THIS IS CRUCIAL for pricing.
         4. If no barcode, identify the exact model by design.
         
         Classify the item STRICTLY into one of these eBay categories: 
-        "Sneakers", "Watches", "Electronics", "Guitars & Basses", "Books/Media", "Collectibles" or "Others".
+        "Sneakers", "Watches", "Electronics", "Guitars & Basses", "Books/Media", "Collectibles", "Health & Beauty" or "Others".
         
         Respond ONLY in a valid JSON format. Provide the values in English, but keep these exact Portuguese keys:
-        {"produto": "Full Commercial Name + Barcode(if it has one)", "categoria": "Chosen Category"}
+        {"produto": "Clean Full Commercial Name + Capacity/Size (if applicable). DO NOT write 'No Barcode' or include barcode numbers in this text.", "categoria": "Chosen Category"}
         """
         
         res_visao = client.models.generate_content(
