@@ -1101,7 +1101,7 @@ with aba2:
 
                     # --- 2. DEFINIÇÃO DE DADOS DO ITEM ---
                     nome_fich = row["File"]
-                    custo = row["Cost"]
+                    custo = float(row.get("Cost", row.get(f"Cost ({currency})", 0.0)))
                     sabe_custo_bulk = not row.get("Unknown Cost", False)
                     
                     # Converter a escolha da tabela para a variável do motor
