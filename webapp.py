@@ -22,6 +22,204 @@ st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 # 🎨 CSS INJETADO — Estilo Premium sem quebrar Streamlit
 # ==========================================
 
+st.markdown("""
+<style>
+/* ===== FONTES & VARIÁVEIS ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary: #7C3AED;
+    --primary-light: #A78BFA;
+    --accent: #10B981;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --bg-dark: #0F0F1A;
+    --bg-card: #1A1A2E;
+    --bg-surface: #16213E;
+    --text-primary: #F1F5F9;
+    --text-muted: #94A3B8;
+    --border: rgba(124, 58, 237, 0.3);
+}
+
+/* ===== BASE ===== */
+html, body, .stApp {
+    background: linear-gradient(135deg, #0F0F1A 0%, #16213E 50%, #0F0F1A 100%) !important;
+    font-family: 'Inter', sans-serif !important;
+    color: var(--text-primary) !important;
+}
+
+/* ===== ESCONDER HEADER PADRÃO DO STREAMLIT ===== */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+}
+
+/* ===== SIDEBAR ===== */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1A1A2E 0%, #0F0F1A 100%) !important;
+    border-right: 1px solid var(--border) !important;
+}
+[data-testid="stSidebar"] * {
+    color: var(--text-primary) !important;
+}
+
+/* ===== TÍTULO PRINCIPAL ===== */
+h1 {
+    background: linear-gradient(90deg, #A78BFA, #60A5FA, #34D399) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    font-weight: 700 !important;
+    font-size: 2.2rem !important;
+}
+
+h2, h3 {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+/* ===== TABS ===== */
+.stTabs [data-baseweb="tab-list"] {
+    background: var(--bg-card) !important;
+    border-radius: 12px !important;
+    padding: 4px !important;
+    gap: 4px !important;
+    border: 1px solid var(--border) !important;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    border-radius: 8px !important;
+    color: var(--text-muted) !important;
+    font-weight: 500 !important;
+    padding: 8px 16px !important;
+    transition: all 0.2s ease !important;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, var(--primary), #6D28D9) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4) !important;
+}
+
+/* ===== BOTÃO PRIMÁRIO ===== */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    padding: 0.6rem 1.5rem !important;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35) !important;
+    transition: all 0.2s ease !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5) !important;
+}
+
+/* ===== INPUTS & SELECTBOX ===== */
+.stTextInput input, .stNumberInput input, .stSelectbox select,
+[data-testid="stTextInput"] input,
+[data-baseweb="input"] input,
+[data-baseweb="select"] div {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+}
+.stTextInput input:focus, .stNumberInput input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2) !important;
+}
+
+/* ===== MÉTRICAS / CARDS ===== */
+[data-testid="stMetric"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+}
+[data-testid="stMetricValue"] {
+    color: var(--primary-light) !important;
+    font-weight: 700 !important;
+}
+
+/* ===== CONTAINERS COM BORDA ===== */
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"][style*="border"] {
+    background: var(--bg-card) !important;
+    border-color: var(--border) !important;
+    border-radius: 12px !important;
+}
+
+/* ===== FILE UPLOADER ===== */
+[data-testid="stFileUploader"] {
+    background: var(--bg-card) !important;
+    border: 2px dashed var(--border) !important;
+    border-radius: 12px !important;
+}
+
+/* ===== ALERTS / INFO / SUCCESS / WARNING / ERROR ===== */
+.stSuccess, [data-testid="stAlert"][data-type="success"] {
+    background: rgba(16, 185, 129, 0.1) !important;
+    border-left: 4px solid var(--accent) !important;
+    border-radius: 8px !important;
+}
+.stWarning, [data-testid="stAlert"][data-type="warning"] {
+    background: rgba(245, 158, 11, 0.1) !important;
+    border-left: 4px solid var(--warning) !important;
+    border-radius: 8px !important;
+}
+.stError, [data-testid="stAlert"][data-type="error"] {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border-left: 4px solid var(--danger) !important;
+    border-radius: 8px !important;
+}
+.stInfo, [data-testid="stAlert"][data-type="info"] {
+    background: rgba(124, 58, 237, 0.1) !important;
+    border-left: 4px solid var(--primary) !important;
+    border-radius: 8px !important;
+}
+
+/* ===== DATAFRAME / TABELAS ===== */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+.dvn-scroller {
+    background: var(--bg-card) !important;
+}
+
+/* ===== CHAT ===== */
+[data-testid="stChatMessage"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    margin-bottom: 8px !important;
+}
+
+/* ===== PROGRESS BAR ===== */
+.stProgress > div > div {
+    background: linear-gradient(90deg, var(--primary), var(--primary-light)) !important;
+    border-radius: 10px !important;
+}
+
+/* ===== SPINNER ===== */
+.stSpinner > div {
+    border-top-color: var(--primary) !important;
+}
+
+/* ===== DIVIDER ===== */
+hr {
+    border-color: var(--border) !important;
+    opacity: 0.5 !important;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
+</style>
+""", unsafe_allow_html=True)
+
+
 
 # --- 1. ZONA DE CONFIGURAÇÃO ---
 st.sidebar.header("⚙️ Market Settings")
