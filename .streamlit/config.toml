@@ -1,0 +1,11 @@
+[theme]
+# Força o modo escuro como padrão absoluto
+base = "dark"
+
+# (Opcional) Já agora, trancamos as cores principais do teu design 
+# para o Streamlit não tentar inventar cores nas caixas de seleção
+primaryColor = "#7c3aed"
+backgroundColor = "#0d0d1a"
+secondaryBackgroundColor = "#1a1a35"
+textColor = "#e2e8f0"
+font = "sans serif"
