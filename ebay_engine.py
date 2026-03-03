@@ -77,19 +77,9 @@ def _build_search_queries(produto):
     return variantes
 
 
-def buscar_precos_ebay(token, produto, marketplace_id="EBAY_US", limit=100):
-    """
-    Motor de pesquisa eBay v2.0 — Multi-query, retry inteligente, fallback automático.
-    
-    Melhorias vs v1:
-    - Tenta até 3 variantes da query antes de desistir
-    - Usa LH_Sold (sold listings) via Browse API filter
-    - Retry com backoff exponencial em caso de 429/500
-    - Timeout e tratamento de erros de rede
-    - Retorna SEMPRE um dict válido (nunca crasha)
-    """
+def buscar_precos_ebay(token, produto, marketplace_id="EBAY_US", limit=100, filter_condition=""):
     if not token:
-        return {"itemSummaries": [], "error": "No eBay token"}
+        return {"itemSummaries": [], "error": "No token"}
 
     variantes = _build_search_queries(produto)
     headers = {
@@ -99,60 +89,69 @@ def buscar_precos_ebay(token, produto, marketplace_id="EBAY_US", limit=100):
         "Content-Type": "application/json"
     }
 
-    for idx, query in enumerate(variantes):
+    # ===================================================
+    # FASE 1: Tentar SOLD LISTINGS
+    # ===================================================
+    for query in variantes:
         encoded_query = quote_plus(query)
-        
-        # Browse API — itens ativos (preço de mercado atual)
-        # Usamos buyingOptions=FIXED_PRICE para excluir leilões com preços inflacionados
-        url = (
+        filtros_sold = "soldItems:{true}"
+        if filter_condition:
+            filtros_sold += f",conditionIds:{{{filter_condition}}}"
+
+        url_sold = (
             f"https://api.ebay.com/buy/browse/v1/item_summary/search"
-            f"?q={encoded_query}"
-            f"&limit={limit}"
-            f"&filter=buyingOptions:{{FIXED_PRICE}}"
-            f"&sort=price"
+            f"?q={encoded_query}&limit={limit}&filter={filtros_sold}&sort=-endDate"
         )
 
         for attempt in range(3):
             try:
-                res = requests.get(url, headers=headers, timeout=12)
-                
+                res = requests.get(url_sold, headers=headers, timeout=12)
                 if res.status_code == 200:
                     data = res.json()
-                    total = data.get("total", 0)
-                    items = data.get("itemSummaries", [])
-                    
-                    # Se esta variante devolveu resultados, usa-a
-                    if len(items) >= 3:
+                    if len(data.get("itemSummaries", [])) >= 3:
+                        data["_source"] = "sold"
                         return data
-                    
-                    # Se devolveu 0 resultados, tenta próxima variante
-                    break
-                
+                    break 
                 elif res.status_code == 429:
-                    # Rate limit — espera exponencial
-                    wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
-                    time.sleep(wait_time)
-                
+                    time.sleep((2 ** attempt) * 5)
                 elif res.status_code in [401, 403]:
-                    # Token inválido — não tem sentido fazer retry
-                    return {"itemSummaries": [], "error": f"Auth error: {res.status_code}"}
-                
+                    return {"itemSummaries": [], "error": f"Auth error {res.status_code}"}
                 else:
-                    # Erro de servidor — tenta novamente
-                    if attempt < 2:
-                        time.sleep(3)
-                    
-            except requests.exceptions.Timeout:
-                if attempt < 2:
-                    time.sleep(2)
-            except requests.exceptions.ConnectionError:
-                if attempt < 2:
-                    time.sleep(3)
-            except Exception as e:
-                return {"itemSummaries": [], "error": str(e)}
+                    if attempt < 2: time.sleep(3)
+            except:
+                if attempt < 2: time.sleep(2)
 
-    # Se todas as variantes falharam, retorna vazio (nunca crasha)
-    return {"itemSummaries": [], "total": 0}
+    # ===================================================
+    # FASE 2: Fallback — Ativos com FIXED_PRICE
+    # ===================================================
+    for query in variantes:
+        encoded_query = quote_plus(query)
+        filtros_active = "buyingOptions:{FIXED_PRICE}"
+        if filter_condition:
+            filtros_active += f",conditionIds:{{{filter_condition}}}"
+
+        url_active = (
+            f"https://api.ebay.com/buy/browse/v1/item_summary/search"
+            f"?q={encoded_query}&limit={limit}&filter={filtros_active}&sort=price"
+        )
+
+        for attempt in range(2):
+            try:
+                res = requests.get(url_active, headers=headers, timeout=12)
+                if res.status_code == 200:
+                    data = res.json()
+                    if len(data.get("itemSummaries", [])) >= 3:
+                        data["_source"] = "active"
+                        return data
+                    break
+                elif res.status_code == 429:
+                    time.sleep(10)
+                else:
+                    if attempt < 1: time.sleep(3)
+            except:
+                pass
+
+    return {"itemSummaries": [], "total": 0, "_source": "empty"}
 
 
 def buscar_precos_vendidos_ebay(token, produto, marketplace_id="EBAY_US"):
