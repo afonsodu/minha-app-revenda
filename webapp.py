@@ -1109,7 +1109,7 @@ with aba2:
                                 tentativas += 1
                                 time.sleep(10 * tentativas)
                             elif "Read Error" in dados.get("produto",""):
-                                st.error(f"❌ Error: {nome_fich}")
+                                st.error(f"❌ Error: {nome_fich}: {dados.get('estrategia_base')}")
                                 break
                             else:
                                 sucesso = True
