@@ -90,6 +90,12 @@ def comprimir_imagem(pil_image):
     return img_copy
 
 
+def obter_base64_imagem(upload_file):
+    """Converte o ficheiro carregado numa mini-imagem para a tabela do Streamlit."""
+    bytes_data = upload_file.getvalue()
+    b64_str = base64.b64encode(bytes_data).decode()
+    return f"data:image/png;base64,{b64_str}"
+
 
 def garantir_token_ebay():
     if 'ebay_token' not in st.session_state:
@@ -1048,15 +1054,24 @@ with aba2:
     fotos_bulk = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="bulk_up")
     
     if fotos_bulk:
-        # 1. Criar o "Cofre" BASE (Nunca sobrecrevemos isto com o editor!)
+        # 1. Criar o "Cofre" BASE com a coluna "Preview" (A Miniatura)
         if "tabela_base" not in st.session_state or len(st.session_state.tabela_base) != len(fotos_bulk):
             dados_iniciais = []
             for f in fotos_bulk:
-                dados_iniciais.append({"File": f.name, "Cost ": 0.0, "Unknown Cost": False, "Condition": "Used", "Action": "Sell"})
+                img_preview = obter_base64_imagem(f) # Gera a imagem pequenina
+                dados_iniciais.append({
+                    "Preview": img_preview, # <-- Nova coluna de imagem!
+                    "File": f.name, 
+                    "Cost": 0.0, 
+                    "Unknown Cost": False, 
+                    "Condition": "Used", 
+                    "Action": "Sell"
+                })
             st.session_state.tabela_base = pd.DataFrame(dados_iniciais)
             
-        # 2. Configurar as colunas (Dropdowns)
+        # 2. Configurar as colunas (Dropdowns e Imagens)
         col_config = {
+            "Preview": st.column_config.ImageColumn("Image", width="small"), # <-- Diz ao Streamlit que isto é uma imagem
             "Condition": st.column_config.SelectboxColumn("Condition", width="medium", options=["Used", "Brand New", "Parts"]),
             "Cost": st.column_config.NumberColumn(f"Cost ({currency})", min_value=0.0)
         }
@@ -1066,7 +1081,7 @@ with aba2:
         else:
             col_config["Action"] = None
             
-        # 3. O SEGREDO: A tabela editada é uma nova variável e lê da base, mas NÃO sobrecreve a base!
+        # 3. Mostrar a tabela com a miniatura ao vivo
         tabela_editada = st.data_editor(
             st.session_state.tabela_base, 
             num_rows="dynamic", 
