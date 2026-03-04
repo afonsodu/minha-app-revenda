@@ -1225,15 +1225,33 @@ with aba3:
         if noticias:
             for n in noticias:
                 with st.container(border=True):
-                    # Título grande
-                    st.subheader(n['titulo'])
-                    # A data limpa (ex: 2026-03-04)
-                    data_limpa = n['created_at'][:10] if 'created_at' in n else "Hoje"
-                    st.caption(f"📅 Publicado a {data_limpa}")
+                    # Dividimos o espaço: Coluna 1 (Texto - 75% do espaço), Coluna 2 (Imagem - 25% do espaço)
+                    col_texto, col_imagem = st.columns([3, 1])
                     
-                    # O botão para ler a notícia real
-                    if 'link' in n and n['link']:
-                        st.link_button("Ler Artigo Completo 🔗", n['link'])
+                    with col_texto:
+                        # Título grande
+                        st.subheader(n['titulo'])
+                        
+                        # Data e categoria (se existir)
+                        data_limpa = n['created_at'][:10] if 'created_at' in n else "Hoje"
+                        categoria = n.get('categoria', 'Market Trends')
+                        st.caption(f"📅 Publicado a {data_limpa} | 🏷️ {categoria}")
+                        
+                        # O TEXTO DA NOTÍCIA
+                        if 'conteudo' in n and n['conteudo']:
+                            st.markdown(n['conteudo'])
+                            
+                        # Botão (para notícias antigas que tinham a coluna 'link')
+                        if 'link' in n and n['link']:
+                            st.link_button("Ler Artigo Completo 🔗", n['link'])
+                            
+                    with col_imagem:
+                        # A FOTO DA NOTÍCIA
+                        if 'imagem_url' in n and n['imagem_url']:
+                            st.image(n['imagem_url'], use_container_width=True)
+                        else:
+                            # Um ícone de substituição caso a notícia não tenha foto
+                            st.markdown("<h1 style='text-align: center; color: #475569;'>🗞️</h1>", unsafe_allow_html=True)
         else:
             st.info("No news yet. Come back soon!")
     except Exception as e:
