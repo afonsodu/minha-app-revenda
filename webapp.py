@@ -14,6 +14,7 @@ import os
 from google.oauth2 import service_account
 import numpy as np
 import re
+from news_manager import mostrar_painel_noticias
 
 st.set_page_config(page_title="Valurise", page_icon="💎", layout="wide")
 
@@ -875,6 +876,9 @@ with st.sidebar:
     st.markdown("**Legend:**")
     st.markdown("🟢 Profitable | 🟡 Break-even | 🔴 Loss | 🔮 AI Estimate")
 
+if st.query_params.get("admin") == "valurise2026":
+    st.success("Bem-vindo ao Backoffice, Admin.")
+    mostrar_painel_noticias(supabase)
 
 # ==========================================
 # 📱 INTERFACE
@@ -1214,25 +1218,26 @@ with aba3:
     st.markdown("### 📈 Market Radar — Trends & Opportunities")
     st.divider()
     try:
-        resp_news = supabase.table("noticias").select("*").order("created_at", desc=True).limit(20).execute()
+        # Puxa as 10 últimas notícias da base de dados
+        resp_news = supabase.table("noticias").select("*").order("created_at", desc=True).limit(10).execute()
         noticias = resp_news.data
+        
         if noticias:
             for n in noticias:
                 with st.container(border=True):
-                    c1n, c2n = st.columns([3, 1])
-                    with c1n:
-                        st.subheader(n['titulo'])
-                        st.caption(f"📅 {n['created_at'][:10]} | 🏷️ {n.get('categoria','General')}")
-                        st.markdown(n['conteudo'])
-                    with c2n:
-                        if n.get('imagem_url'): st.image(n['imagem_url'], use_container_width=True)
-                        else: st.markdown("# 🗞️")
+                    # Título grande
+                    st.subheader(n['titulo'])
+                    # A data limpa (ex: 2026-03-04)
+                    data_limpa = n['created_at'][:10] if 'created_at' in n else "Hoje"
+                    st.caption(f"📅 Publicado a {data_limpa}")
+                    
+                    # O botão para ler a notícia real
+                    if 'link' in n and n['link']:
+                        st.link_button("Ler Artigo Completo 🔗", n['link'])
         else:
             st.info("No news yet. Come back soon!")
-    except:
-        st.error("Error loading news.")
-
-
+    except Exception as e:
+        st.error(f"Error loading news: {e}")
 # ==========================================
 # ABA HISTÓRICO
 # ==========================================
@@ -1274,3 +1279,4 @@ with aba_historico:
 
 
 mostrar_rodape_legal()
+
