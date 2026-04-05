@@ -679,13 +679,17 @@ def _preco_otimizado(dados_filtrados, fonte):
 defaults = {
     "email_logado": None, "single_result": None,
     "chat_history_single": [], "chat_session_single": None,
-    "bulk_results": [], "bulk_images": {},
+    "bulk_results": [], "bulk_images": {}, "bulk_fase1": [],
     "chat_history_bulk": [], "chat_session_bulk": None,
     "current_bulk_item": None, "historico_conversas": [],
     "id_conversa_ativa": None,
     "regime_configurado": False, "regime_region": "🇺🇸 USA ($)",
     "regime_seller_type": "Business", "regime_store_plan": "No Store",
     "regime_vat": "Yes", "regime_top_rated": False, "regime_intl_shipping": "Own carrier",
+    "esperando_resposta": False,
+    "dados_ia_guardados": None,
+    "pergunta_pendente": "",
+    "img_temporaria": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state: 
@@ -858,35 +862,39 @@ marketplace_atual = mapa_marketplaces.get(region, "EBAY_US")
 
 def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
     try:
-        # ── PASSO 1: IDENTIFICAÇÃO GEMINI ──
-        prompt_id = f"""
-You are a world-class resale item identifier. Analyze this image with maximum precision.
+        if not pre_dados:
+            prompt_id = f"""
+            You are a world-class resale item identifier. Analyze this image with maximum precision.
 
-Return ONLY a JSON object with these exact keys:
+            Return ONLY a JSON object with these exact keys:
 
-"produto": Full commercial product name with brand + model + key variant.
-  - Electronics: include storage/RAM if visible (e.g. "Apple iPhone 13 128GB Black")
-  - Sneakers: brand + model + colorway (e.g. "Nike Air Max 90 White Black")
-  - Perfumes: brand + name + concentration + size (e.g. "Chanel Bleu de Chanel EDP 100ml")
-  - DO NOT include: condition words, barcodes, "no barcode"
+            "produto": Full commercial product name with brand + model + key variant.
+            - Electronics: include storage/RAM if visible (e.g. "Apple iPhone 13 128GB Black")
+            - Sneakers: brand + model + colorway (e.g. "Nike Air Max 90 White Black")
+            - Perfumes: brand + name + concentration + size (e.g. "Chanel Bleu de Chanel EDP 100ml")
+            - DO NOT include: condition words, barcodes, "no barcode"
 
-"ebay_query": 5-8 word search string a professional reseller would type on eBay to find SOLD listings.
-  Include most identifying attributes (brand, model, key variant).
-  Omit generic words: "good", "nice", "great", "original".
-  Examples: "Apple iPhone 13 128GB Black Unlocked", "Nike Air Max 90 Black White", "Sony PS5 Disc Edition"
+            "ebay_query": 5-8 word search string a professional reseller would type on eBay to find SOLD listings.
+            Include most identifying attributes (brand, model, key variant).
+            Omit generic words: "good", "nice", "great", "original".
+            Examples: "Apple iPhone 13 128GB Black Unlocked", "Nike Air Max 90 Black White", "Sony PS5 Disc Edition"
 
-"categoria": ONE of: Sneakers, Watches, Electronics, Guitars & Basses, Books/Media, Collectibles, Health & Beauty, Others
+            "categoria": ONE of: Sneakers, Watches, Electronics, Guitars & Basses, Books/Media, Collectibles, Health & Beauty, Others
 
-"confianca": Integer 0-100. Certainty of exact model identification.
-  90+: Brand AND model clearly readable. 70-89: Brand clear, model inferred. 50-69: Brand recognised model uncertain. <50: Uncertain.
+            "confianca": Integer 0-100. Certainty of exact model identification.
+            90+: Brand AND model clearly readable. 70-89: Brand clear, model inferred. 50-69: Brand recognised model uncertain. <50: Uncertain.
 
-"atributos": List of max 3 key distinguishing attributes as strings.
-  e.g. ["128GB","Black","Unlocked"] or ["UK Size 10","White Black"] or ["EDP","100ml"]
+            "atributos": List of max 3 key distinguishing attributes as strings.
+            e.g. ["128GB","Black","Unlocked"] or ["UK Size 10","White Black"] or ["EDP","100ml"]
 
-Region context: {region}. Write ALL values in English.
-Respond ONLY with valid JSON, no other text:
-{{"produto":"...","ebay_query":"...","categoria":"...","confianca":85,"atributos":[...]}}
-        """
+            "pergunta_extra": Based on this specific product, what single piece of information that you did not see in the image would most improve eBay price accuracy?
+            Return a natural question in English the user can answer.
+            If nothing important is missing, return null.
+
+            Region context: {region}. Write ALL values in English.
+            Respond ONLY with valid JSON, no other text:
+            {{"produto":"...","ebay_query":"...","categoria":"...","confianca":85,"atributos":[...],"pergunta_extra":"..."}}
+                    """
         res_visao = client.models.generate_content(model='gemini-2.0-flash', contents=[prompt_id, image])
         texto = res_visao.text.replace("```json", "").replace("```", "").strip()
         jm = re.search(r'\{.*?\}', texto, re.DOTALL)
@@ -900,12 +908,14 @@ Respond ONLY with valid JSON, no other text:
             categoria_item = di.get("categoria", "Others")
             confianca = di.get("confianca", 50)
             atributos = di.get("atributos", [])
+            pergunta_ai = di.get("pergunta_extra")
         except json.JSONDecodeError:
             nome_item = texto[:80].strip()
             ebay_query = nome_item
             categoria_item = "Others"
             confianca = 30
             atributos = []
+            pergunta_ai = None
 
         # ── PASSO 2: PESQUISA PROFISSIONAL ──
         token = garantir_token_ebay()
@@ -1115,6 +1125,7 @@ Respond ONLY with valid JSON, no other text:
             "sell_through_rate": str_pct,
             "str_label": str_label,
             "str_cor": str_cor,
+            "pergunta_extra": pergunta_ai if 'pergunta_ai' in dir() else None,
         }
     except Exception as e:
         return {
@@ -1370,87 +1381,305 @@ with aba2:
         with cb2: 
             st.info(f"📷 {len(fotos_bulk)} items")
             
+        # ── FASE 1: identificar items + recolher perguntas ──
         if btn_bulk:
-            if not st.session_state.get('email_logado'): 
+            if not st.session_state.get('email_logado'):
                 st.warning("Must be logged in.")
             else:
                 st.session_state.bulk_results = []
                 st.session_state.bulk_images = {}
-                barra = st.progress(0, text="Processing...")
+                st.session_state.bulk_fase1 = []
+                barra = st.progress(0, text="Identifying items...")
                 total = len(tabela_editada)
-                
+
                 for i, row in tabela_editada.iterrows():
-                    if trava_seguranca_global(): 
-                        st.error(f"🛑 Global limit at item {i+1}.")
-                        break
-                        
-                    pode, saldo = gerir_creditos(st.session_state.email_logado)
-                    if not modo_simulacao and not pode: 
-                        st.warning(f"⚠️ Credits exhausted at item {i+1}.")
-                        break
-                        
                     nome_fich = row["File"]
+                    foto_r = next((f for f in fotos_bulk if f.name == nome_fich), None)
+                    if not foto_r:
+                        continue
+                    if i > 0:
+                        time.sleep(1)
+                    foto_r.seek(0)
+                    img = comprimir_imagem(PIL.Image.open(foto_r))
+                    st.session_state.bulk_images[nome_fich] = img
+                    barra.progress((i + 0.5) / total, text=f"🔍 {nome_fich}...")
+
+                    try:
+                        prompt_id_rapido = f"""
+You are a world-class resale item identifier. Analyze this image with maximum precision.
+Return ONLY a JSON object:
+"produto": Full commercial product name with brand + model + key variant.
+"ebay_query": 5-8 word eBay search string a professional reseller would use.
+"categoria": ONE of: Sneakers, Watches, Electronics, Guitars & Basses, Books/Media, Collectibles, Health & Beauty, Others
+"confianca": Integer 0-100.
+"atributos": List of max 3 key distinguishing attributes.
+"pergunta_extra": The single most important piece of info NOT visible in the image that would improve eBay price accuracy. Write it as a natural question (e.g. "What size are these? (e.g. US 10)"). If nothing important is missing, return null.
+Region context: {region}. Write ALL values in English.
+Respond ONLY valid JSON: {{"produto":"...","ebay_query":"...","categoria":"...","confianca":85,"atributos":[...],"pergunta_extra":"..."}}
+                        """
+                        res_id = client.models.generate_content(model='gemini-2.0-flash', contents=[prompt_id_rapido, img])
+                        texto_id = res_id.text.replace("```json","").replace("```","").strip()
+                        jm_id = re.search(r'\{.*?\}', texto_id, re.DOTALL)
+                        if jm_id:
+                            texto_id = jm_id.group()
+                        di = json.loads(texto_id)
+                    except:
+                        di = {"produto": nome_fich, "ebay_query": nome_fich, "categoria": "Others", "confianca": 0, "atributos": [], "pergunta_extra": None}
+
                     custo = float(row.get(f"Cost ({currency})", row.get("Cost", 0.0)))
                     sabe = not row.get("Unknown Cost", False)
                     cond_t = row.get("Condition", "Used")
-                    cond_c = "Brand New" if cond_t == "Brand New" else "Parts" if cond_t == "Parts" else "Used"
                     obj_f = "Buy" if "Buying" in modo_geral else "Sell" if "Selling" in modo_geral else row.get("Action", "Sell")
-                    foto_r = next((f for f in fotos_bulk if f.name == nome_fich), None)
-                    
-                    if foto_r:
-                        if i > 0: time.sleep(2)
-                        foto_r.seek(0)
-                        img = comprimir_imagem(PIL.Image.open(foto_r))
-                        st.session_state.bulk_images[nome_fich] = img
-                        barra.progress((i + 0.5) / total, text=f"🔍 {nome_fich}...")
-                        
-                        tentativas = 0
-                        sucesso = False
-                        dados = {}
-                        while tentativas < 3 and not sucesso:
-                            if not modo_simulacao: 
-                                supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
-                                
-                            dados = analisar_imagem_json(img, custo, obj_f, sabe, cond_c)
-                            
-                            if "429" in str(dados.get("estrategia_base", "")) or "Resource exhausted" in str(dados.get("estrategia_base", "")):
-                                tentativas += 1
-                                time.sleep(10 * tentativas)
-                            elif "Read Error" in dados.get("produto", ""):
-                                st.error(f"❌ Error:{nome_fich}:{dados.get('estrategia_base')}")
-                                break
+
+                    st.session_state.bulk_fase1.append({
+                        "file": nome_fich,
+                        "produto": di.get("produto", nome_fich),
+                        "ebay_query": di.get("ebay_query", nome_fich),
+                        "categoria": di.get("categoria", "Others"),
+                        "confianca": di.get("confianca", 0),
+                        "atributos": di.get("atributos", []),
+                        "pergunta_extra": di.get("pergunta_extra"),
+                        "resposta_extra": "",
+                        "custo": custo,
+                        "sabe_custo": sabe,
+                        "condicao": cond_t,
+                        "objetivo": obj_f,
+                    })
+                    barra.progress((i + 1) / total, text=f"✅ {nome_fich}")
+
+                st.rerun()
+
+        # ── FASE 1.5: mostrar perguntas ao utilizador ──
+        if st.session_state.get("bulk_fase1") and not st.session_state.bulk_results:
+            st.divider()
+            st.markdown("### 🤖 AI identified your items — fill in any missing details")
+            st.caption("Leave blank or click **Don't know** to run a general search.")
+
+            for idx, item in enumerate(st.session_state.bulk_fase1):
+                with st.container(border=True):
+                    c_img, c_info, c_q = st.columns([1, 2, 2])
+                    with c_img:
+                        img_prev = st.session_state.bulk_images.get(item["file"])
+                        if img_prev:
+                            st.image(img_prev, use_container_width=True)
+                    with c_info:
+                        st.markdown(f"**{item['produto']}**")
+                        st.caption(f"{item['categoria']} | AI confidence: {item['confianca']}%")
+                    with c_q:
+                        if item["pergunta_extra"]:
+                            col_inp, col_dk = st.columns([3, 1])
+                            with col_inp:
+                                resposta = st.text_input(
+                                    item["pergunta_extra"],
+                                    value=item["resposta_extra"],
+                                    key=f"resp_{idx}",
+                                )
+                                st.session_state.bulk_fase1[idx]["resposta_extra"] = resposta
+                            with col_dk:
+                                st.write("")
+                                if st.button("Don't know", key=f"dk_{idx}"):
+                                    st.session_state.bulk_fase1[idx]["resposta_extra"] = ""
+                        else:
+                            st.caption("✅ No extra info needed")
+
+            btn_processar = st.button("🚀 Search eBay & Get Prices", type="primary", use_container_width=True)
+
+            if btn_processar:
+                barra2 = st.progress(0, text="Searching eBay...")
+                total2 = len(st.session_state.bulk_fase1)
+
+                for i, item in enumerate(st.session_state.bulk_fase1):
+                    if trava_seguranca_global():
+                        st.error(f"🛑 Global limit at item {i+1}.")
+                        break
+                    pode, saldo = gerir_creditos(st.session_state.email_logado)
+                    if not modo_simulacao and not pode:
+                        st.warning(f"⚠️ Credits exhausted at item {i+1}.")
+                        break
+
+                    nome_fich = item["file"]
+                    img = st.session_state.bulk_images.get(nome_fich)
+                    if not img:
+                        continue
+
+                    ebay_query_final = item["ebay_query"]
+                    if item["resposta_extra"].strip():
+                        ebay_query_final = f"{item['ebay_query']} {item['resposta_extra'].strip()}"
+
+                    custo = item["custo"]
+                    sabe = item["sabe_custo"]
+                    cond_c = "Brand New" if item["condicao"] == "Brand New" else "Parts" if item["condicao"] == "Parts" else "Used"
+                    obj_f = item["objetivo"]
+
+                    if i > 0:
+                        time.sleep(2)
+                    barra2.progress((i + 0.5) / total2, text=f"🔍 {nome_fich}...")
+
+                    if not modo_simulacao:
+                        supabase.table("historico_geral").insert({"data": datetime.now().date().isoformat()}).execute()
+
+                    token = garantir_token_ebay()
+                    items_scored, fonte_dados, query_usada = pesquisar_ebay_profissional(
+                        token, item["produto"], ebay_query_final, item["categoria"], cond_c, marketplace_atual)
+
+                    dados_validados = []
+                    for it in items_scored:
+                        try:
+                            titulo = it.get('title','')
+                            cid = str(it.get('conditionId',''))
+                            if cond_c == "Brand New":
+                                if cid not in ["1000","1500","1750","2000"]: continue
+                            elif cond_c == "Parts":
+                                if cid != "7000": continue
                             else:
-                                sucesso = True
-                                if not modo_simulacao: 
-                                    gastar_credito(st.session_state.email_logado)
-                                    
-                        if sucesso:
-                            roi_v = dados.get('roi_pct')
-                            roi_s = f"{roi_v:.0f}%" if roi_v is not None else "—"
-                            st.session_state.bulk_results.append({
-                                "File": nome_fich,
-                                f"Cost ({currency})": f"{currency}{custo}",
-                                "Item": dados.get('produto', 'Unknown'),
-                                "Verdict": dados.get('veredito_cor', '🟡'),
-                                f"Median ({currency})": f"{currency}{dados.get('preco_medio', 0)}",
-                                f"Target ({currency})": f"{currency}{dados.get('sugestao_venda', 0)}",
-                                f"Fees ({currency})": f"{currency}{dados.get('taxas_estimadas', 0)}",
-                                f"Profit ({currency})": f"{currency}{dados.get('lucro_estimado', 0)}",
-                                "Margin %": f"{dados.get('margem_pct', 0):.1f}%",
-                                "ROI": roi_s,
-                                "STR": dados.get('str_label', '—'),
-                                "AI Conf.": f"{dados.get('confianca_ia', 0)}%",
-                                "Source": dados.get('fonte_dados', '?'),
-                                "Strategy": dados.get('estrategia_base'),
-                                "eBay Link": dados.get('link_pesquisa', ''),
-                                "Raw": dados
-                            })
-                            guardar_no_historico(dados, obj_f, st.session_state.email_logado)
-                            
-                        barra.progress((i + 1) / total, text=f"✅ {nome_fich}")
-                        
-                if st.session_state.bulk_results: 
-                    st.success(f"✅ Done! {len(st.session_state.bulk_results)}/{total} analysed.")
+                                if cid in ["1000","1500","1750","7000"]: continue
+                            if not item_passa_filtro(titulo, cond_c, query_usada): continue
+                            valor = float(it.get('price',{}).get('value',0))
+                            if valor < 3.0: continue
+                            try:
+                                ops = it.get('shippingOptions',[])
+                                envio = float(ops[0].get('shippingCost',{}).get('value',0)) if ops else 0.0
+                            except:
+                                envio = 4.50
+                            if envio > 40.0: continue
+                            dados_validados.append({"preco": valor, "envio": envio, "titulo": titulo})
+                        except:
+                            continue
+
+                    dados_filtrados = []
+                    if dados_validados:
+                        lp = [d["preco"] for d in dados_validados]
+                        med = np.median(lp)
+                        q1_v = np.percentile(lp,25)
+                        q3_v = np.percentile(lp,75)
+                        iqr = q3_v - q1_v
+                        lower = max(q1_v - 1.5*iqr, med*0.25)
+                        upper = q3_v + 1.5*iqr
+                        dados_filtrados = [d for d in dados_validados if lower <= d["preco"] <= upper]
+                        if not dados_filtrados:
+                            dados_filtrados = dados_validados
+                    num_amostra = len(dados_filtrados)
+
+                    if fonte_dados == "sold":
+                        str_pct, str_label, str_cor = _calcular_str(num_amostra, 0)
+                    elif fonte_dados == "active":
+                        str_pct, str_label, str_cor = _calcular_str(0, num_amostra)
+                    else:
+                        str_pct, str_label, str_cor = None, "No data", "⚪"
+
+                    if dados_filtrados and num_amostra >= 2:
+                        p_venda, portes_medios, stats = _preco_otimizado(dados_filtrados, fonte_dados)
+                        p_medio = stats["mediana"]
+                        p25_v = stats["p25"]
+                        p75_v = stats["p75"]
+                        spread = stats["spread_pct"]
+                    else:
+                        p_venda = p_medio = portes_medios = 0.0
+                        p25_v = p75_v = spread = 0.0
+                        stats = {}
+
+                    if p_medio > 0:
+                        comissao = calculate_ebay_fees(
+                            region=region, seller_type=seller_type, vat_registered=vat_registered,
+                            categoria=item["categoria"], sale_price=p_venda, store_plan=store_plan,
+                            top_rated=top_rated, intl_shipping_method=intl_shipping, buyer_location="Domestic"
+                        )
+                        taxas_estimadas = portes_medios + comissao
+                        custo_real = 0 if not sabe else custo
+                        lucro = p_venda - custo_real - taxas_estimadas
+                        margem_pct = (lucro / p_venda * 100) if p_venda > 0 else 0
+                        roi_pct = (lucro / custo_real * 100) if custo_real > 0 else None
+                        dom = {"🇺🇸 USA ($)":"ebay.com","🇬🇧 UK (£)":"ebay.co.uk","🇵🇹 Portugal (€)":"ebay.es"}.get(region,"ebay.com")
+                        cu_map = {"Brand New":"&LH_ItemCondition=3","Parts":"&LH_ItemCondition=7000","Used":"&LH_ItemCondition=4"}
+                        fu = cu_map.get(cond_c,"&LH_ItemCondition=4")
+                        qu = query_usada.replace(' ','+')
+                        link_sold = f"https://www.{dom}/sch/i.html?_nkw={qu}&LH_Sold=1&LH_Complete=1{fu}"
+                        link_active = f"https://www.{dom}/sch/i.html?_nkw={qu}{fu}"
+                        if lucro < 0: cor = "🔴"
+                        elif margem_pct >= 20 and num_amostra >= 5: cor = "🟢"
+                        elif margem_pct >= 8: cor = "🟡"
+                        else: cor = "🔴"
+                        fl = "✅ Sold listings" if fonte_dados == "sold" else "⚠️ Active listings"
+                        pmc = round(p_venda - taxas_estimadas, 2)
+                        sv = f"|⚠️ Volatile mkt ({spread:.0f}%)" if spread > 35 else ""
+                        rt = f"|ROI:{roi_pct:.0f}%" if roi_pct is not None else ""
+                        rl = f"{region}|{seller_type}"
+                        if lucro < 0:
+                            estrategia = f"❌ Loss {currency}{abs(round(lucro,2))}|{fl}|{num_amostra} refs|Source below {currency}{pmc}{sv}"
+                        elif margem_pct < 8:
+                            estrategia = f"⚠️ Tight {round(margem_pct,1)}% margin{rt}|{fl}|{num_amostra} refs[{rl}]{sv}"
+                        elif margem_pct >= 20:
+                            estrategia = f"🔥 Excellent {round(margem_pct,1)}%{rt}|{fl}|{num_amostra} refs|Strong demand[{rl}]{sv}"
+                        else:
+                            estrategia = f"👍 Solid {round(margem_pct,1)}%{rt}|{fl}|{num_amostra} refs[{rl}]{sv}"
+                    else:
+                        taxas_estimadas = lucro = margem_pct = p_medio = p_venda = 0.0
+                        roi_pct = None
+                        p25_v = p75_v = spread = 0.0
+                        cor = "⚪"
+                        link_sold = link_active = ""
+                        estrategia = "No eBay data found. Try a clearer photo or fill in more details."
+
+                    dados = {
+                        "produto": item["produto"],
+                        "ebay_query": ebay_query_final,
+                        "query_usada": query_usada,
+                        "categoria": item["categoria"],
+                        "atributos": item["atributos"],
+                        "confianca_ia": item["confianca"],
+                        "fonte_dados": fonte_dados,
+                        "preco_medio": round(p_medio,2),
+                        "preco_p25": round(p25_v,2),
+                        "preco_p75": round(p75_v,2),
+                        "sugestao_venda": round(p_venda,2),
+                        "taxas_estimadas": round(taxas_estimadas,2),
+                        "lucro_estimado": round(lucro,2),
+                        "margem_pct": round(margem_pct,1),
+                        "roi_pct": round(roi_pct,1) if roi_pct is not None else None,
+                        "custo_compra": custo if sabe else 0,
+                        "link_pesquisa": link_sold,
+                        "link_ativo": link_active,
+                        "estrategia_base": estrategia,
+                        "veredito_cor": cor,
+                        "num_amostra": num_amostra,
+                        "sell_through_rate": str_pct,
+                        "str_label": str_label,
+                        "str_cor": str_cor,
+                        "pergunta_extra": item["pergunta_extra"],
+                    }
+
+                    if not modo_simulacao:
+                        gastar_credito(st.session_state.email_logado)
+
+                    roi_v = dados.get('roi_pct')
+                    roi_s = f"{roi_v:.0f}%" if roi_v is not None else "—"
+                    st.session_state.bulk_results.append({
+                        "File": nome_fich,
+                        f"Cost ({currency})": f"{currency}{custo}",
+                        "Item": dados.get('produto','Unknown'),
+                        "Verdict": dados.get('veredito_cor','🟡'),
+                        f"Median ({currency})": f"{currency}{dados.get('preco_medio',0)}",
+                        f"Target ({currency})": f"{currency}{dados.get('sugestao_venda',0)}",
+                        f"Fees ({currency})": f"{currency}{dados.get('taxas_estimadas',0)}",
+                        f"Profit ({currency})": f"{currency}{dados.get('lucro_estimado',0)}",
+                        "Margin %": f"{dados.get('margem_pct',0):.1f}%",
+                        "ROI": roi_s,
+                        "STR": dados.get('str_label','—'),
+                        "AI Conf.": f"{dados.get('confianca_ia',0)}%",
+                        "Source": dados.get('fonte_dados','?'),
+                        "Strategy": dados.get('estrategia_base'),
+                        "eBay Link": dados.get('link_pesquisa',''),
+                        "Raw": dados
+                    })
+                    guardar_no_historico(dados, obj_f, st.session_state.email_logado)
+                    barra2.progress((i + 1) / total2, text=f"✅ {nome_fich}")
+
+                st.session_state.bulk_fase1 = []
+                if st.session_state.bulk_results:
+                    st.success(f"✅ Done! {len(st.session_state.bulk_results)}/{total2} analysed.")
+                st.rerun()
+
+
                     
     if st.session_state.bulk_results:
         st.divider()
@@ -1679,7 +1908,7 @@ with aba_settings:
         categoria="Others", sale_price=100.0, store_plan=store_plan, top_rated=top_rated
     )
     st.metric(f"Fees on a {currency}100 sale", f"{currency}{pf:.2f}", delta=f"{pf:.1f}% effective rate", delta_color="inverse")
-    
+
 def mostrar_rodape_legal():
     st.divider()
     st.caption("""
