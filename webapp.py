@@ -865,7 +865,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
         if not pre_dados:
             prompt_id = f"""
             You are a world-class resale item identifier. Analyze this image with maximum precision.
-
+            The user has stated the item condition is: "{condicao}". Take this into account.
             Return ONLY a JSON object with these exact keys:
 
             "produto": Full commercial product name with brand + model + key variant.
@@ -887,9 +887,11 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             "atributos": List of max 3 key distinguishing attributes as strings.
             e.g. ["128GB","Black","Unlocked"] or ["UK Size 10","White Black"] or ["EDP","100ml"]
 
-            "pergunta_extra": Based on this specific product, what single piece of information that you did not see in the image would most improve eBay price accuracy?
+            "pergunta_extra": Based on this specific product, what single piece of information would most improve eBay price accuracy?
             Return a natural question in English the user can answer.
-            If nothing important is missing, return null.
+            If nothing important is missing, return null. 
+            (only ask the question if you can not see that information on the image
+            or if that information was not given to you).
 
             Region context: {region}. Write ALL values in English.
             Respond ONLY with valid JSON, no other text:
