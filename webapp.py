@@ -891,8 +891,9 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             "pergunta_extra": Based on this specific product, what single piece of information would most improve eBay price accuracy?
             Return a natural question in English the user can answer.
             If nothing important is missing, return null. 
-            (only ask the question if you can not see that information on the image
-            or if that information was not given to you).
+            Only ask the question if you can not see that information on the image
+            or if that information was not given to you.
+            The product will be searched no ebay with "name of the product" + answer to your question, so make sure the answer to your question is something that makes sence in this matter and do not ask it if it is not strickly necessary.
 
             Region context: {region}. Write ALL values in English.
             Respond ONLY with valid JSON, no other text:
