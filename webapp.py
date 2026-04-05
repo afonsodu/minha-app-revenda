@@ -1679,7 +1679,15 @@ with aba_settings:
         categoria="Others", sale_price=100.0, store_plan=store_plan, top_rated=top_rated
     )
     st.metric(f"Fees on a {currency}100 sale", f"{currency}{pf:.2f}", delta=f"{pf:.1f}% effective rate", delta_color="inverse")
-
+    
+def mostrar_rodape_legal():
+    st.divider()
+    st.caption("""
+    ⚖️ **Legal Disclaimer:** Valurise is an independent AI-powered analysis tool. 
+    Estimates are based on public eBay data and Gemini AI vision. 
+    Final resale decisions and tax compliance are the sole responsibility of the user. 
+    We are not affiliated with eBay Inc.
+    """)
 mostrar_rodape_legal()
 
 # ==========================================
