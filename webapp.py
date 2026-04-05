@@ -866,7 +866,7 @@ def analisar_imagem_json(image, custo, objetivo, sabe_custo, condicao):
             prompt_id = f"""
             You are a world-class resale item identifier. Analyze this image with maximum precision.
             The user has stated the item condition is: "{condicao}". 
-            Take this into account and only ask the condition in your extra question if it is about something really specific and important to the value of the object.
+            Take this into account and do not ask about the condition in your extra question.
             Return ONLY a JSON object with these exact keys:
 
             "produto": Full commercial product name with brand + model + key variant.
